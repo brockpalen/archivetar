@@ -108,7 +108,7 @@ class DwalkParser:
                        self.indexcount+=1
                        tartmp.close()
                        index.close()
-                       print(f"min size of {minsize} reached")
+                       print(f"Minimum Archive Size {minsize} reached, Expected size: {sizesum}")
                        yield index_p, tartmp_p
                        # continue after yeilding file paths back to program
                        sizesum = 0
