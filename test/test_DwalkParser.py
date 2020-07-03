@@ -27,6 +27,7 @@ def test_DwalkParser_doesntexist(kwargs):
 
 @pytest.mark.parametrize("kwargs,result,expex", [
            ({'minsize': 1e9}, 6, does_not_raise()),
+           ({}, 2, does_not_raise()),                  # default arg 10 GByte
            ({'minsize': 1e12}, 2, does_not_raise()),   # PB should only create 2 files (index + tar)
            ])
 def test_DwalkParser_tarlist(parser, tmp_path, kwargs, result, expex):
