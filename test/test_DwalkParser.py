@@ -1,6 +1,7 @@
 import pytest, shutil, pathlib, sys, os
 from pprint import PrettyPrinter as pp
 from contextlib import ExitStack as does_not_raise
+from unittest.mock import MagicMock
 from conftest import count_files_dir, count_lines_dir
 sys.path.append(os.path.abspath('./'))
 
@@ -43,11 +44,20 @@ def test_DwalkParser_tarlist(parser, tmp_path, kwargs, result, expex):
         
 
 @pytest.fixture
-def test_DwalkLine():
+def test_DwalkLine(monkeypatch):
+
    s = r"-rwxr-xr-x mmiranda support   1.220 GB Mar  4 2020 15:58 /scratch/support_root/support/mmiranda/ouser/dmontiel/mg1/lib/libdeal_II.g.so"
+
+   # patch out os.getcwd() to use that expected by test data
+   mock_os_getcwd = MagicMock(spec=os.path)
+   mock_os_getcwd.return_value = '/scratch/support_root/support'
+  
+   monkeypatch.setattr(os, 'getcwd', mock_os_getcwd)
+
+
    line = DwalkLine(line=s)
    assert line.size == 1.220*1e9
-   assert line.path == '/scratch/support_root/support/mmiranda/ouser/dmontiel/mg1/lib/libdeal_II.g.so'
+   assert line.path == 'mmiranda/ouser/dmontiel/mg1/lib/libdeal_II.g.so'
    yield line
 
 @pytest.mark.parametrize("kwargs,result,expex", [

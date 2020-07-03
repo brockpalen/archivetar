@@ -19,7 +19,7 @@
 # * allow direct handoff to Globus CLI
 # * mpibzip2
 
-import shutil, pathlib, re, subprocess
+import shutil, pathlib, re, subprocess, os
 from tempfile import mkstemp
 
 def find_gzip():
@@ -56,7 +56,7 @@ class DwalkLine:
         #print(f"units: {match[2]}") #units
         #print(f"file: {match[3]}")  #path
         self.size = self._normilizeunits(units=match[2], count=float(match[1]))  #size in bytes
-        self.path = match[3]
+        self.path = self._stripcwd(match[3])
 
     def _normilizeunits(self, units=False, count=False):
         """convert size by SI units to Bytes"""
@@ -74,6 +74,11 @@ class DwalkLine:
            return 1000*1000*1000*1000*count
         else:
            raise Exception(f"{units} is not a known SI unit")
+
+    def _stripcwd(self, path):
+       """dwalk print absolute paths, we need relative"""
+       
+       return os.path.relpath(path, os.getcwd())
 
 
 class DwalkParser:
