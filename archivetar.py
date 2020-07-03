@@ -19,13 +19,13 @@
 # * allow direct handoff to Globus CLI
 # * mpibzip2
 
-import shutil, pathlib, re
+import shutil, pathlib, re, subprocess
 from tempfile import mkstemp
 
 def find_gzip():
     """find pigz if installed in PATH otherwise return gzip"""
-    pigz =  shutil.which(pbcopy)
-    gzip =  shutil.which(gzip)
+    pigz =  shutil.which('pigz')
+    gzip =  shutil.which('gzip')
     if pigz:
        return pigz
     elif gzip:
@@ -35,9 +35,9 @@ def find_gzip():
 
 def find_bzip():
     """find pigz if installed in PATH otherwise return gzip"""
-    lbzip2 =  shutil.which(lbzip2)
-    pbzip2 =  shutil.which(pbzip2)
-    bzip2 =  shutil.which(bzip2)
+    lbzip2 =  shutil.which('lbzip2')
+    pbzip2 =  shutil.which('pbzip2')
+    bzip2 =  shutil.which('bzip2')
     if lbzip2:
        return lbzip2
     elif pbzip2:
@@ -112,7 +112,7 @@ class DwalkParser:
                        yield index_p, tartmp_p
                        # continue after yeilding file paths back to program
                        sizesum = 0
-                       tartmp_p = pathlib.Path.cwd() / f'{prefix}-{self.indexcount}.tartmp.txt' # list of files suitable for gnutar
+                       tartmp_p = pathlib.Path.cwd() / f'{prefix}-{self.indexcount}.DONT_DELETE.txt' # list of files suitable for gnutar
                        index_p  = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
                        index = index_p.open('w')
                        tartmp = tartmp_p.open('w')
@@ -121,5 +121,38 @@ class DwalkParser:
                 yield index_p, tartmp_p
 
 
-       
-                 
+
+class SuperTar:
+      """ tar wrapper class for high speed """
+      # requires gnu tar
+      def __init__(self, 
+                   compress=False, # compress or not False | GZIP | BZ2
+                   verbose=False,  # print extra information when arching
+                   purge=False):   # pass --remove-files
+
+          self._flags = [ "tar", "--sparse" ]
+
+          if compress == 'GZIP':
+             self._flags.append(f'--use-compress-program={find_gzip()}')
+          elif compress == 'BZ2':
+             self._flags.append(f'--use-compress-program={find_bzip()}')
+
+          if verbose:
+             self._flags.append('--verbose')
+             self._verbose = True
+
+          if purge:
+             self._flags.append('--remove-files')
+
+      def addfromfile(self, path):
+           """load list of files from file eg tar -cvf output.tar --files-from=<file>"""
+           self._flags.append(f'--files-from={path}')
+           rc = subprocess.run(self._flags, check=True)
+  
+      def addfrompath(self, path):
+           """load from fs path eg tar -cvf output.tar /path/to/tar"""
+           pass
+ 
+#############  MAIN  ################                 
+
+
