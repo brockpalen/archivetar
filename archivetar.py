@@ -131,7 +131,7 @@ class SuperTar:
       """ tar wrapper class for high speed """
       # requires gnu tar
       def __init__(self, 
-                   compress=False, # compress or not False | GZIP | BZ2
+                   compress=False, # compress or not False | GZIP | BZ2 | LZ4
                    verbose=False,  # print extra information when arching
                    purge=False):   # pass --remove-files
 
