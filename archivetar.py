@@ -19,7 +19,7 @@
 # * allow direct handoff to Globus CLI
 # * mpibzip2
 
-import shutil, pathlib, re, subprocess, os
+import shutil, pathlib, re, subprocess, os, argparse, sys
 from tempfile import mkstemp
 
 def find_gzip():
@@ -165,7 +165,58 @@ class SuperTar:
       def addfrompath(self, path):
            """load from fs path eg tar -cvf output.tar /path/to/tar"""
            pass
+
+
+
  
 #############  MAIN  ################                 
 
+def parse_args(args):
+    """ CLI options"""
+    parser = argparse.ArgumentParser(
+                        description='Prepare a directory for arching',
+                        epilog="Brock Palen brockp@umich.edu")
+    #parser.add_argument('--dryrun', help='Print what would do but dont do it", action="store_true")
+    parser.add_argument('-p', '--prefix', 
+                        help="prefix for tar eg prefix-1.tar prefix-2.tar etc",
+                        type=str,
+                        required=True)
+                        
+    parser.add_argument('-s', '--size', 
+                        help="Cutoff size for files include (eg. 10G 100M) Default 20G",
+                        type=str,
+                        default="20G")
+    parser.add_argument('-t', '--tar-size', 
+                        help="Target tar size before options (eg. 10G 1T) Default 100G",
+                        type=str,
+                        default="100G")
+ 
+    parser.add_argument('--remove-files', 
+                        help="Delete files as/when added to archive (CAREFUL)",
+                        action="store_true")
+ 
+    verbosity = parser.add_mutually_exclusive_group()
+    verbosity.add_argument('-v', '--verbose',
+                        help="Increase messages, including files as added",
+                        action="store_true")
+    verbosity.add_argument('-q', '--quiet',
+                        help="Decrease messages",
+                        action="store_true")
+  
+    compression = parser.add_mutually_exclusive_group()
+    compression.add_argument('-z', '--gzip',
+                        help="Compress tar with GZIP",
+                        action="store_true")
+    compression.add_argument('-j', '--bzip', '--bzip2',
+                        help="Compress tar with BZIP",
+                        action="store_true")
+    compression.add_argument('--lz4',
+                        help="Compress tar with lz4",
+                        action="store_true")
+ 
+    args = parser.parse_args(args)
+    return args
 
+
+if __name__ == "__main__":
+   args = parse_args(sys.argv[1:])
