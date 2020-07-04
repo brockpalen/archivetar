@@ -20,6 +20,7 @@
 # * mpibzip2
 
 import shutil, pathlib, re, subprocess, os, argparse, sys
+import humanfriendly
 from tempfile import mkstemp
 
 def find_gzip():
@@ -47,14 +48,34 @@ def find_bzip():
     else:
        raise Exception("gzip compression but no gzip or pigz found in PATH")
 
+def find_xz():
+    """find pixz if installed in PATH otherwise return xz"""
+    pixz =  shutil.which('pixz')
+    xz =  shutil.which('xz')
+    if pixz:
+       return pixz
+    elif xz:
+       return xz
+    else:
+       raise Exception("lzma/xz compression but no pixz or xz found in PATH")
+
+def find_lzma():
+    """alias for find_xz()"""
+    return find_xz()
+
 class DwalkLine:
-    def __init__(self, line=False):
+    def __init__(self, line=False, relativeto=False):
         """parse dwalk output line"""
         #-rw-r--r-- bennet support 578.000  B Oct 22 2019 09:35 /scratch/support_root/support/bennet/haoransh/DDA_2D_60x70_kulow_1.batch
         match = re.match(r"\S+\s+\S+\s+\S+\s+(\d+\.\d+)\s+(\S+)\s+.+\s(/.+)", line)
         #print(f"units: {match[1]}") #size
         #print(f"units: {match[2]}") #units
         #print(f"file: {match[3]}")  #path
+        if relativeto:
+            self.relativeto = relativeto
+        else:
+            self.relativeto = os.getcwd()
+
         self.size = self._normilizeunits(units=match[2], count=float(match[1]))  #size in bytes
         self.path = self._stripcwd(match[3])
 
@@ -78,7 +99,7 @@ class DwalkLine:
     def _stripcwd(self, path):
        """dwalk print absolute paths, we need relative"""
        
-       return os.path.relpath(path, os.getcwd())
+       return os.path.relpath(path, self.relativeto)
 
 
 class DwalkParser:
@@ -113,7 +134,7 @@ class DwalkParser:
                        self.indexcount+=1
                        tartmp.close()
                        index.close()
-                       print(f"Minimum Archive Size {minsize} reached, Expected size: {sizesum}")
+                       print(f"Minimum Archive Size {humanfriendly.format_size(minsize)} reached, Expected size: {humanfriendly.format_size(sizesum)}")
                        yield index_p, tartmp_p
                        # continue after yeilding file paths back to program
                        sizesum = 0
