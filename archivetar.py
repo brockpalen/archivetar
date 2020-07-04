@@ -166,6 +166,8 @@ class SuperTar:
              self._flags.append(f'--use-compress-program={find_gzip()}')
           elif compress == 'BZ2':
              self._flags.append(f'--use-compress-program={find_bzip()}')
+          elif compress == 'XZ':
+             self._flags.append(f'--use-compress-program={find_xz()}')
           elif compress == 'LZ4':
              self._flags.append(f'--lz4')
           elif compress:
@@ -234,6 +236,9 @@ def parse_args(args):
     compression.add_argument('--lz4',
                         help="Compress tar with lz4",
                         action="store_true")
+    compression.add_argument('--xz', '--lzma',
+                        help="Compress tar with xz/lzma",
+                        action="store_true")
  
     args = parser.parse_args(args)
     return args
@@ -241,3 +246,11 @@ def parse_args(args):
 
 if __name__ == "__main__":
    args = parse_args(sys.argv[1:])
+
+   # build list
+   # list parser
+   # for list in tarlist()
+       #SuperTar
+
+   # if globus(dest)
+       # globus put
