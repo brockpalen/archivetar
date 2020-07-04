@@ -141,6 +141,10 @@ class SuperTar:
              self._flags.append(f'--use-compress-program={find_gzip()}')
           elif compress == 'BZ2':
              self._flags.append(f'--use-compress-program={find_bzip()}')
+          elif compress == 'LZ4':
+             self._flags.append(f'--lz4')
+          elif compress:
+             raise Exception("Invalid Compressor {compress}")
 
           if verbose:
              self._flags.append('--verbose')
