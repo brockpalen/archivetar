@@ -131,11 +131,15 @@ class SuperTar:
       """ tar wrapper class for high speed """
       # requires gnu tar
       def __init__(self, 
+                   filename=False, # path to file eg output.tar
                    compress=False, # compress or not False | GZIP | BZ2 | LZ4
                    verbose=False,  # print extra information when arching
                    purge=False):   # pass --remove-files
 
-          self._flags = [ "tar", "--sparse" ]
+          if not filename:   # filename needed  eg tar --file <filename>
+             raise Exception("no filename given for tar")
+
+          self._flags = [ "tar", "--sparse", '--create', '--file', filename ]
 
           if compress == 'GZIP':
              self._flags.append(f'--use-compress-program={find_gzip()}')

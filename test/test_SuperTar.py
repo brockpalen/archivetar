@@ -8,13 +8,33 @@ sys.path.append(os.path.abspath('./'))
 from archivetar import SuperTar
 
 
-def test_SuperTar():
-    tar = SuperTar()
-    pp(tar._flags)
+@pytest.mark.parametrize("kwargs,expex", [
+           (
+              {'filename': 'mytar.tar'},
+               does_not_raise()
+           ),
+           (
+              {},   # missing required filename= kwarg
+               pytest.raises(BaseException)
+           )
+           ])
+def test_SuperTar(kwargs, expex):
+    with expex:
+        tar = SuperTar(**kwargs)
+        pp(tar._flags)
 
 @pytest.mark.parametrize("kwargs,kresult,kwresult,expex", [
-           ({'verbose': True}, ['tar', '--sparse', '--verbose'], {'check': True}, does_not_raise()),
-           ({}, ['tar', '--sparse'], {'check': True}, does_not_raise())
+           (
+              {'verbose': True, 'filename': 'mytar.tar'},
+              ['tar', '--sparse', '--create', '--file', 'mytar.tar', '--verbose'],
+              {'check': True},
+               does_not_raise()
+           ),
+           (
+              {'filename': 'mytar.tar'},
+              ['tar', '--sparse', '--create','--file', 'mytar.tar'],
+              {'check': True},
+               does_not_raise())
            ])
 def test_SuperTar_opts_addfromfile(monkeypatch, kwargs, kresult, kwresult, expex):
     mock = Mock(spec=subprocess)
@@ -25,7 +45,7 @@ def test_SuperTar_opts_addfromfile(monkeypatch, kwargs, kresult, kwresult, expex
     # actual test code
     tar = SuperTar(**kwargs)
     tar.addfromfile('/does/not/exist')
-    kresult.append('--files-from=/does/not/exist')
+    kresult.append('--files-from=/does/not/exist')  # added from .addfromfile()
     mock.assert_called_once_with(kresult, **kwresult)
 
 
