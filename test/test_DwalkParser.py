@@ -1,11 +1,17 @@
-import pytest, shutil, pathlib, sys, os
-from pprint import PrettyPrinter as pp
+import os
+import pathlib
+import sys
 from contextlib import ExitStack as does_not_raise
+from pprint import PrettyPrinter as pp
 from unittest.mock import MagicMock
+
+import pytest
 from conftest import count_files_dir, count_lines_dir
+
 sys.path.append(os.path.abspath('./'))
 
-from archivetar import DwalkParser, DwalkLine
+from archivetar import DwalkLine, DwalkParser
+
 
 @pytest.fixture
 def example_data():
@@ -17,6 +23,7 @@ def example_data():
 def parser(example_data):
     """test constructor with default options"""
     parser = DwalkParser(path=example_data)
+
     yield parser
 
 @pytest.mark.parametrize("kwargs", ["", { 'path': '/tmp/absolutegarbage.txta'}])

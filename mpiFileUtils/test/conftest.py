@@ -1,6 +1,7 @@
-import pytest
-from unittest.mock import MagicMock
 import subprocess
+from unittest.mock import MagicMock
+
+import pytest
 
 
 @pytest.fixture

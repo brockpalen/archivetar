@@ -1,8 +1,15 @@
-import pytest, shutil, pathlib, sys, os, subprocess
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+from contextlib import ExitStack as does_not_raise
 from pprint import pprint as pp
 from unittest.mock import Mock
-from contextlib import ExitStack as does_not_raise
+
+import pytest
 from conftest import count_files_dir, count_lines_dir
+
 sys.path.append(os.path.abspath('./'))
 
 from archivetar import SuperTar

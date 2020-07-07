@@ -1,5 +1,8 @@
-import pytest, pathlib
+import pathlib
 from subprocess import check_output
+
+import pytest
+
 
 def count_files_dir(path):
     """count number of files recursivly in path"""

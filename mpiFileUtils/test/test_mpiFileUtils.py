@@ -1,10 +1,16 @@
-import pytest, sys, os, subprocess, pathlib
-from unittest.mock import Mock
+import os
+import pathlib
+import subprocess
+import sys
 from contextlib import ExitStack as does_not_raise
+from unittest.mock import Mock
+
+import pytest
 
 sys.path.append(pathlib.Path(__file__).parent.parent)
 
-from  mpiFileUtils import mpiFileUtils, mpirunError, DWalk
+from mpiFileUtils import DWalk, mpiFileUtils, mpirunError
+
 
 @pytest.mark.parametrize("kwargs,expex", [
     (

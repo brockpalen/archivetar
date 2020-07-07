@@ -19,9 +19,17 @@
 # * allow direct handoff to Globus CLI
 # * mpibzip2
 
-import shutil, pathlib, re, subprocess, os, argparse, sys
-import humanfriendly
+import argparse
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
 from tempfile import mkstemp
+
+import humanfriendly
+
 
 def find_gzip():
     """find pigz if installed in PATH otherwise return gzip"""
