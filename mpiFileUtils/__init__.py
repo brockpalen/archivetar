@@ -52,7 +52,7 @@ class DWalk(mpiFileUtils):
 
         if filter:
             # can be many options -atime +60 -user user etc
-            self.args.append(filter.split())
+            self.args += filter
 
         if progress:
             self.args += ['--progress', str(progress)]
