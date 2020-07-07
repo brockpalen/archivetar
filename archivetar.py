@@ -293,6 +293,41 @@ def build_list(path=False,
     return cache
 
 
+def filter_list(path=False,
+                size=False,
+                prefix=False):
+    """
+    Take cache list and filter it into two lists
+    Files greater than size and those less than
+
+    Prameters:
+        path (pathlib) Path to existing cache file
+        size (int) size in bytes to filter on
+        prefix (str) Prefix for scanfiles
+
+    Returns:
+        oversize (pathlib) Path to files over size
+        undersize (pathlib) Path to files under size
+    """
+
+    # configure DWalk
+    under_dwalk = DWalk(
+        inst='/home/brockp/mpifileutils/install',
+        mpirun='/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun',
+        sort='name',
+        progress='10',
+        filter=['--type', 'f', '--size', f"-{size}"])
+
+    c_path = pathlib.Path(tempfile.gettempdir())
+    textout = c_path / f'{prefix}.under.txt'
+
+    # start the actual scan
+    under_dwalk.scancache(cachein=path,
+                          textout=textout)
+
+    return cache
+
+
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     if args.quiet:
@@ -302,10 +337,16 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.INFO)
 
-    logging.info("----> [Phase 1] Build List of Files")
-    args = {'path': args.path,
-            'prefix': args.prefix}
-    cache = build_list(**args)
+    logging.info("----> [Phase 1] Build Global List of Files")
+    b_args = {'path': args.path,
+              'prefix': args.prefix}
+    cache = build_list(**b_args)
+    logging.debug(f"Results of full path scan saved at {cache}")
+
+    logging.info(f"----> [Phase 1.5] Filter out files greater than {args.size}")
+    littlelist = filter_list(path=cache,
+                             size=humanfriendly.parse_size(args.size),
+                             prefix=cache.stem)
 
     # list parser
     # for list in tarlist()
