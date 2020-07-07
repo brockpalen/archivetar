@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 
 # Brock Palen
 # brockp@umich.edu
@@ -26,8 +26,12 @@ import re
 import shutil
 import subprocess
 import sys
+import logging
 
 import humanfriendly
+
+from mpiFileUtils import DWalk
+
 
 
 def find_gzip():
@@ -204,6 +208,9 @@ def parse_args(args):
         description='Prepare a directory for arching',
         epilog="Brock Palen brockp@umich.edu")
     # parser.add_argument('--dryrun', help='Print what would do but dont do it", action="store_true")
+    parser.add_argument("path",
+                        help="path to walk",
+                        type=str)
     parser.add_argument('-p', '--prefix',
                         help="prefix for tar eg prefix-1.tar prefix-2.tar etc",
                         type=str,
@@ -249,8 +256,23 @@ def parse_args(args):
 
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
+    if args.quiet:
+        logging.basicConfig(level=logging.WARNING)
+    elif args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     # build list
+    logging.info("----> [Phase 1] Build List of Files")
+    dwalk = DWalk(
+        inst='/home/brockp/mpifileutils/install',
+        mpirun='/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun',
+        sort='name',
+        progress='10')
+
+    dwalk.scanpath(path=args.path, textout='/tmp/scan.txt', cacheout='/tmp/scan.cache')
+
     # list parser
     # for list in tarlist()
     #     SuperTar

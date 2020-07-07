@@ -28,7 +28,6 @@ class mpiFileUtils:
         logging.debug(f"BLANK invoked as {self.args}")
         try:
             subprocess.run(self.args, check=True)
-            print("here")
         except Exception as e:
             logging.exception(f"Problem running: {self.args} and {e}")
             raise mpiFileUtilsError(f"Problems {e}")
@@ -64,13 +63,13 @@ class DWalk(mpiFileUtils):
                  cacheout=False):
         """walk a path on filesystem"""
 
+        self._setoutput(textout=textout, cacheout=cacheout)
+
         if not path:
             logging.error(f"path: {path} not set/exist")
             raise mpiFileUtilsError(f"path: {path} not set/exist")
         else:
             self.args.append(path)
-
-        self._setoutput(textout=textout, cacheout=cacheout)
 
         # actually run it
         self.apply()
