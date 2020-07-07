@@ -27,11 +27,12 @@ import shutil
 import subprocess
 import sys
 import logging
+import datetime
+import tempfile
 
 import humanfriendly
 
 from mpiFileUtils import DWalk
-
 
 
 def find_gzip():
@@ -254,6 +255,44 @@ def parse_args(args):
     return args
 
 
+def build_list(path=False,
+               prefix=False,
+               savecache=False):
+    """
+    scan filelist and return path to results
+
+    Parameters:
+        path (str/pathlib) Path to scan
+        prefix (str) Prefix for scan file eg. prefix-{date}.cache
+        savecache (bool) Save cache file in cwd or only in TMPDIR
+
+    Returns:
+        cache (pathlib) Path to cache file
+    """
+
+    # configure DWalk
+    dwalk = DWalk(
+        inst='/home/brockp/mpifileutils/install',
+        mpirun='/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun',
+        sort='name',
+        progress='10')
+
+    # generate timestamp name
+    today = datetime.datetime.today()
+    datestr = today.strftime('%Y-%m-%d-%H-%M-%S')
+
+    # put into cwd or TMPDIR ?
+    c_path = pathlib.Path.cwd() if savecache else pathlib.Path(tempfile.gettempdir())
+    cache = c_path / f'{prefix}-{datestr}.cache'
+    logging.debug(f"Scan saved to {cache}")
+
+    # start the actual scan
+    dwalk.scanpath(path=path,
+                   cacheout=cache)
+
+    return cache
+
+
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     if args.quiet:
@@ -263,15 +302,10 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.INFO)
 
-    # build list
     logging.info("----> [Phase 1] Build List of Files")
-    dwalk = DWalk(
-        inst='/home/brockp/mpifileutils/install',
-        mpirun='/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun',
-        sort='name',
-        progress='10')
-
-    dwalk.scanpath(path=args.path, textout='/tmp/scan.txt', cacheout='/tmp/scan.cache')
+    args = {'path': args.path,
+            'prefix': args.prefix}
+    cache = build_list(**args)
 
     # list parser
     # for list in tarlist()
