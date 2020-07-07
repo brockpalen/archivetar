@@ -42,7 +42,7 @@ def test_DwalkParser_tarlist(parser, tmp_path, kwargs, result, expex):
     """test DwalkParser.tarlist() """
     os.chdir(tmp_path)
     print(tmp_path)
-    for index, tarlist in parser.tarlist(**kwargs):
+    for count, index, tarlist in parser.tarlist(**kwargs):
         print(f"Index -> {index}")
         print(f"tarlist -> {tarlist}")
 

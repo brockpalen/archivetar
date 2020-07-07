@@ -134,7 +134,7 @@ class DwalkParser:
 
         logging.debug(f"minsize is set to {minsize} B")
 
-        tartmp_p = pathlib.Path.cwd() / f'{prefix}-{self.indexcount}.tartmp.txt'  # list of files suitable for gnutar
+        tartmp_p = pathlib.Path.cwd() / f'{prefix}-{self.indexcount}.DONT_DELETE.txt'  # list of files suitable for gnutar
         index_p = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
         sizesum = 0  # size in bytes thus far
         index = index_p.open('w')
@@ -146,11 +146,11 @@ class DwalkParser:
             tartmp.write(f"{pl.path}\n")  # write doesn't append newline
             if sizesum >= minsize:
                 # max size in tar reached
-                self.indexcount += 1
                 tartmp.close()
                 index.close()
                 print(f"Minimum Archive Size {humanfriendly.format_size(minsize)} reached, Expected size: {humanfriendly.format_size(sizesum)}")
-                yield index_p, tartmp_p
+                yield self.indexcount, index_p, tartmp_p
+                self.indexcount += 1
                 # continue after yeilding file paths back to program
                 sizesum = 0
                 tartmp_p = pathlib.Path.cwd() / f'{prefix}-{self.indexcount}.DONT_DELETE.txt'  # list of files suitable for gnutar
@@ -159,7 +159,7 @@ class DwalkParser:
                 tartmp = tartmp_p.open('w')
         index.close()   # close and return for final round
         tartmp.close()
-        yield index_p, tartmp_p
+        yield self.indexcount, index_p, tartmp_p
 
 
 class SuperTar:
@@ -174,16 +174,23 @@ class SuperTar:
         if not filename:   # filename needed  eg tar --file <filename>
             raise Exception("no filename given for tar")
 
-        self._flags = ["tar", "--sparse", '--create', '--file', filename]
+        self.filename = filename
 
+        self._flags = ["tar", "--sparse", '--create']
+
+        self.compsuffix = None
         if compress == 'GZIP':
             self._flags.append(f'--use-compress-program={find_gzip()}')
+            self.compsuffix = '.gz'
         elif compress == 'BZ2':
             self._flags.append(f'--use-compress-program={find_bzip()}')
+            self.compsuffix = '.bz2'
         elif compress == 'XZ':
             self._flags.append(f'--use-compress-program={find_xz()}')
+            self.compsuffix = '.xz'
         elif compress == 'LZ4':
             self._flags.append('--lz4')
+            self.compsuffix = '.lz4'
         elif compress:
             raise Exception("Invalid Compressor {compress}")
 
@@ -197,11 +204,19 @@ class SuperTar:
     def addfromfile(self, path):
         """load list of files from file eg tar -cvf output.tar --files-from=<file>"""
         self._flags.append(f'--files-from={path}')
-        rc = subprocess.run(self._flags, check=True)
 
     def addfrompath(self, path):
         """load from fs path eg tar -cvf output.tar /path/to/tar"""
         pass
+
+    def invoke(self):
+        """"actually kick off the tar"""
+        if self.compsuffix:
+            self.filename = f"{self.filename}{self.compsuffix}"
+
+        self._flags += ['--file', self.filename]
+        logging.debug(f"Tar invoked with: {self._flags}")
+        subprocess.run(self._flags, check=True)
 
 
 #############  MAIN  ################
@@ -359,10 +374,19 @@ if __name__ == "__main__":
         # list parser
         logging.info(f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}")
         parser = DwalkParser(path=littlelist)
-        for index, tar in parser.tarlist(prefix=args.prefix,
+        for index, index_p, tar_list in parser.tarlist(prefix=args.prefix,
                                          minsize=humanfriendly.parse_size(args.tar_size)):
-            print(f"    Index: {index}")
-            print(f"    tar: {tar}")
+            logging.info(f"    Index: {index_p}")
+            logging.info(f"    tar: {tar_list}")
+
+            # actauly tar them up
+            if not args.dryrun:
+                # if compression
+                # if remove
+                tar = SuperTar(filename=f"{args.prefix}-{index}.tar", purge=True)
+                tar.addfromfile(tar_list)
+                tar.invoke()
+
 
     # bail if --dryrun requested
     if args.dryrun:

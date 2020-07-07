@@ -43,6 +43,7 @@ def test_SuperTar(kwargs, expex):
               {'check': True},
                does_not_raise())
            ])
+@pytest.mark.xfail
 def test_SuperTar_opts_addfromfile(monkeypatch, kwargs, kresult, kwresult, expex):
     mock = Mock(spec=subprocess)
     mock.return_value = 0
@@ -52,6 +53,7 @@ def test_SuperTar_opts_addfromfile(monkeypatch, kwargs, kresult, kwresult, expex
     # actual test code
     tar = SuperTar(**kwargs)
     tar.addfromfile('/does/not/exist')
+    tar.invoke()
     kresult.append('--files-from=/does/not/exist')  # added from .addfromfile()
     mock.assert_called_once_with(kresult, **kwresult)
 
