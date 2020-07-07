@@ -211,7 +211,10 @@ def parse_args(args):
     parser = argparse.ArgumentParser(
         description='Prepare a directory for arching',
         epilog="Brock Palen brockp@umich.edu")
-    # parser.add_argument('--dryrun', help='Print what would do but dont do it", action="store_true")
+    parser.add_argument('--dryrun',
+                        help="Print what would do but dont do it, aditional --dryrun increases how far the script runs\n 1 = Walk Filesystem and stop, 2 = Filter and create sublists",
+                        action="count",
+                        default=0)
     parser.add_argument("path",
                         help="path to walk",
                         type=str)
@@ -348,19 +351,23 @@ if __name__ == "__main__":
     logging.debug(f"Results of full path scan saved at {cache}")
 
     # filter for files under size
-    logging.info(f"----> [Phase 1.5] Filter out files greater than {args.size}")
-    littlelist = filter_list(path=cache,
-                             size=humanfriendly.parse_size(args.size),
-                             prefix=cache.stem)
+    if (not args.dryrun) or (args.dryrun == 2):
+        logging.info(f"----> [Phase 1.5] Filter out files greater than {args.size}")
+        littlelist = filter_list(path=cache,
+                                 size=humanfriendly.parse_size(args.size),
+                                 prefix=cache.stem)
+        # list parser
+        logging.info(f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}")
+        parser = DwalkParser(path=littlelist)
+        for index, tar in parser.tarlist(prefix=args.prefix,
+                                         minsize=humanfriendly.parse_size(args.tar_size)):
+            print(f"    Index: {index}")
+            print(f"    tar: {tar}")
 
-    # list parser
-    logging.info(f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}")
-    parser = DwalkParser(path=littlelist)
-    for index, tar in parser.tarlist(prefix=args.prefix,
-                                     minsize=humanfriendly.parse_size(args.tar_size)):
-        print(f"    Index: {index}")
-        print(f"    tar: {tar}")
-
+    # bail if --dryrun requested
+    if args.dryrun:
+        logging.info("--dryrun requested exiting")
+        sys.exit(0)
     # for list in tarlist()
     #     SuperTar
 
