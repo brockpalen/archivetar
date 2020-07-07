@@ -120,6 +120,7 @@ class DwalkParser:
         path = pathlib.Path(path)
         self.indexcount = 1
         if path.is_file():
+            logging.debug(f"using {path} as input for DwalkParser")
             self.path = path.open()
         else:
             raise Exception(f"{self.path} doesn't exist")
@@ -130,6 +131,8 @@ class DwalkParser:
         # OUT tar list suitable for gnutar
         # OUT index list
         """takes dwalk output walks though until sum(size) >= minsize"""
+
+        logging.debug(f"minsize is set to {minsize} B")
 
         tartmp_p = pathlib.Path.cwd() / f'{prefix}-{self.indexcount}.tartmp.txt'  # list of files suitable for gnutar
         index_p = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
@@ -325,7 +328,7 @@ def filter_list(path=False,
     under_dwalk.scancache(cachein=path,
                           textout=textout)
 
-    return cache
+    return textout
 
 
 if __name__ == "__main__":
@@ -337,18 +340,27 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.INFO)
 
+    # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")
     b_args = {'path': args.path,
               'prefix': args.prefix}
     cache = build_list(**b_args)
     logging.debug(f"Results of full path scan saved at {cache}")
 
+    # filter for files under size
     logging.info(f"----> [Phase 1.5] Filter out files greater than {args.size}")
     littlelist = filter_list(path=cache,
                              size=humanfriendly.parse_size(args.size),
                              prefix=cache.stem)
 
     # list parser
+    logging.info(f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}")
+    parser = DwalkParser(path=littlelist)
+    for index, tar in parser.tarlist(prefix=args.prefix,
+                                     minsize=humanfriendly.parse_size(args.tar_size)):
+        print(f"    Index: {index}")
+        print(f"    tar: {tar}")
+
     # for list in tarlist()
     #     SuperTar
 
