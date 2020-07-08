@@ -8,6 +8,27 @@ use big data easier. Targeted mostly at the research / HPC use case it is useful
 
 For additional performance `archivetar` will auto detect many multi-core capable compressors.
 
+#### Example Output
+
+```
+# number of files before
+$ find . -type f | wc -l
+6656
+
+# bundle all files < 1M, into tars 200M in size
+# Delete input files
+archivetar.py --prefix boxout --purge --size 1M --tar-size 200M .
+
+# number of files after
+$ find . -type f | wc -l
+1831
+
+# expand 
+for x in $(ls *.tar)
+   tar -xf $x
+done
+```
+
 
 ### tar-size vs size
 
