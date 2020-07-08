@@ -1,28 +1,22 @@
-archivetar
+Archivetar
 ==========
 
-archivetar (V2) an implimentation of several tools intended to make the archiving and 
-use big data easier. Targeted mostly at the research / HPC use case it is useful in other cases
+archivetar (V2) is a of several tools intended to make the archiving and the
+use big data easier. Targeted mostly at the research / HPC use case it is useful in other cases where having fewer files but not one gigantic file, or skip time on large files.
 
-`archivetar` to make our Spectrum Archive install [Data Den](https://arc-ts.umich.edu/data-den/) more useful to take a folder bundle it and not waste time tar/compressing large files.  It has no dependencies on SA, and could easily be used with AWS Glacier, HPSS, DMF etc.  where you want to minimize the number of objects keeping the data/object ratio high.
+`archivetar` was to make our Spectrum Archive install [Data Den](https://arc-ts.umich.edu/data-den/) more useful. It does this taring only small files, it and not waste time/io on large files.  It has no dependencies on SA, and could easily be used with AWS Glacier, HPSS, DMF etc.  where you want to minimize the number of objects keeping the data/object ratio high.
 
-
-###Workflow
-
-
- * Scan current directory using [mpiFileUtils](https://github.com/hpc/mpifileutils) building  report of all files under `--archive-size`.
- * Build tar's where each tar aims to be (before compression) to be at least `--min-tar-size`
- * Optionally delete files that were included in tars (delete as they are tar'd)
+For additional performance `archivetar` will auto detect many multi-core capable compressors.
 
 
-###tar-size vs size
+### tar-size vs size
 
 
-`--size` is is the minimum size a file has to be in cwd to *not* be included in a tar.  Files under this size are grouped in path order into to tar's that aim to be about `--tar-size`
+`--size` is is the minimum size a file has to be in to *not* be included in a tar.  Files under this size are grouped in path order into to tar's that aim to be about `--tar-size` before compression.
 
 Files are added to the list for each tar one at a time and stops when the estimated size is larger. So tars may be larger (possibly significantly!) depending on the last file added to the tar list.
 
-###archivetar vs tar
+### archivetar vs tar
 
 
 archivetar doesn't try to replace tar. Actaully it uses it internally rather than Pythons native implimentation.  
@@ -55,6 +49,15 @@ This will create `project1-1.tar project1-2.tar` etc.
 archivetar.py --prefix project1 <path>
 ```
 
+Workflow
+========
+
+
+ * Scan current directory using [mpiFileUtils](https://github.com/hpc/mpifileutils)
+ * Filter only files under `--size`
+ * Build sub-tar's where each tar aims to be (before compression) to be at least `--min-tar-size`
+ * Optionally delete files that were included in tars (delete as they are tar'd)
+
 Building archivetar
 -------------------
 
@@ -62,7 +65,14 @@ Building archivetar
 
  * [mpiFileUtils](https://github.com/hpc/mpifileutils) `dwalk` is required. Contributions for a MPI free version using `os.walk()` desired
  * python3.6+
- * pip3 install --user humanfriendly
+ * pip install pipenv
+ * pipenv install
+
+#### Dev options
+
+ * pipenv install --dev
+ * pipenv shell  ( like venv activate )
+ * pytest
 
 ### Optional add ons
 
