@@ -1,4 +1,7 @@
 [![Build Status](https://travis-ci.com/brockpalen/archivetar.svg?branch=master)](https://travis-ci.com/brockpalen/archivetar)
+[![codecov](https://codecov.io/gh/brockpalen/archivetar/branch/master/graph/badge.svg)](https://codecov.io/gh/brockpalen/archivetar)
+
+
 
 Archivetar
 ==========
