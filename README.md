@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/brockpalen/archivetar.svg?branch=master)](https://travis-ci.com/brockpalen/archivetar)
+
 Archivetar
 ==========
 
