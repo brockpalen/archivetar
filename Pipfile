@@ -9,6 +9,7 @@ flake8 = "*"
 isort = "*"
 pytest-flake8 = "*"
 pytest-freezegun = "*"
+pytest-cov = "*"
 
 [packages]
 humanfriendly = "*"
