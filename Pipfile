@@ -14,6 +14,8 @@ codecov = "*"
 pydocstyle = "*"
 bandit = "*"
 black = "==19.10b0"
+pre-commit = "*"
+yamllint = "*"
 
 [packages]
 humanfriendly = "*"
