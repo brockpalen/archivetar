@@ -20,12 +20,12 @@
 # * mpibzip2
 
 import argparse
+import datetime
+import logging
 import os
 import pathlib
 import re
 import sys
-import logging
-import datetime
 import tempfile
 
 import humanfriendly

@@ -1,14 +1,14 @@
 import os
-import sys
 import pathlib
+import sys
 from unittest.mock import MagicMock
 
 import pytest
 
 sys.path.append(os.path.abspath('./'))
 
-from archivetar import build_list
 import archivetar
+from archivetar import build_list
 from mpiFileUtils import DWalk
 
 
