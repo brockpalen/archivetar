@@ -1,5 +1,5 @@
 import logging
-import subprocess
+import subprocess  # nosec
 
 from mpiFileUtils.exceptions import mpiFileUtilsError, mpirunError
 
@@ -30,7 +30,7 @@ class mpiFileUtils:
         """execute wrapped application"""
         logging.debug(f"BLANK invoked as {self.args}")
         try:
-            subprocess.run(self.args, check=True)
+            subprocess.run(self.args, check=True)  # nosec
         except Exception as e:
             logging.exception(f"Problem running: {self.args} and {e}")
             raise mpiFileUtilsError(f"Problems {e}")

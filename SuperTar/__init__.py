@@ -1,6 +1,6 @@
 import logging
 import shutil
-import subprocess
+import subprocess  # nosec
 
 logging.getLogger(__name__).addHandler(logging.NullHandler)
 
@@ -115,4 +115,4 @@ class SuperTar:
 
         self._flags += ["--file", self.filename]
         logging.debug(f"Tar invoked with: {self._flags}")
-        subprocess.run(self._flags, check=True)
+        subprocess.run(self._flags, check=True)  # nosec

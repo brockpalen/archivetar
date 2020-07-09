@@ -1,9 +1,7 @@
-import os
 import pathlib
 import subprocess
 import sys
 from contextlib import ExitStack as does_not_raise
-from unittest.mock import Mock
 
 import pytest
 
@@ -21,7 +19,7 @@ from mpiFileUtils import DWalk, mpiFileUtils, mpirunError
 )
 def test_mpiFileUtils(kwargs, expex):
     with expex:
-        mpifu = mpiFileUtils(**kwargs)
+        mpiFileUtils(**kwargs)
 
 
 @pytest.mark.parametrize(
