@@ -11,6 +11,8 @@ pytest-flake8 = "*"
 pytest-freezegun = "*"
 pytest-cov = "*"
 codecov = "*"
+pydocstyle = "*"
+bandit = "*"
 
 [packages]
 humanfriendly = "*"
