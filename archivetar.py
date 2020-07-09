@@ -44,22 +44,24 @@ class DwalkLine:
         else:
             self.relativeto = os.getcwd()
 
-        self.size = self._normilizeunits(units=match[2], count=float(match[1]))  # size in bytes
+        self.size = self._normilizeunits(
+            units=match[2], count=float(match[1])
+        )  # size in bytes
         self.path = self._stripcwd(match[3])
 
     def _normilizeunits(self, units=False, count=False):
         """convert size by SI units to Bytes"""
-        if (units == 'B'):
+        if units == "B":
             return count
-        elif (units == 'KB'):
+        elif units == "KB":
             return 1000 * count
-        elif (units == 'MB'):
+        elif units == "MB":
             return 1000 * 1000 * count
-        elif (units == 'GB'):
+        elif units == "GB":
             return 1000 * 1000 * 1000 * count
-        elif (units == 'TB'):
+        elif units == "TB":
             return 1000 * 1000 * 1000 * 1000 * count
-        elif (units == 'PB'):
+        elif units == "PB":
             return 1000 * 1000 * 1000 * 1000 * count
         else:
             raise Exception(f"{units} is not a known SI unit")
@@ -80,106 +82,126 @@ class DwalkParser:
         else:
             raise Exception(f"{self.path} doesn't exist")
 
-    def tarlist(self,
-                prefix='archivetar',   # prefix for files
-                minsize=1e9 * 100):    # min size sum of all files in list
+    def tarlist(
+        self, prefix="archivetar", minsize=1e9 * 100  # prefix for files
+    ):  # min size sum of all files in list
         # OUT tar list suitable for gnutar
         # OUT index list
         """takes dwalk output walks though until sum(size) >= minsize"""
 
         logging.debug(f"minsize is set to {minsize} B")
 
-        tartmp_p = pathlib.Path.cwd() / f'{prefix}-{self.indexcount}.DONT_DELETE.txt'  # list of files suitable for gnutar
+        tartmp_p = (
+            pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.DONT_DELETE.txt"
+        )  # list of files suitable for gnutar
         index_p = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
         sizesum = 0  # size in bytes thus far
-        index = index_p.open('w')
-        tartmp = tartmp_p.open('w')
+        index = index_p.open("w")
+        tartmp = tartmp_p.open("w")
         for line in self.path:
             pl = DwalkLine(line=line)
             sizesum += pl.size
-            index.write(line)    # already has newline
+            index.write(line)  # already has newline
             tartmp.write(f"{pl.path}\n")  # write doesn't append newline
             if sizesum >= minsize:
                 # max size in tar reached
                 tartmp.close()
                 index.close()
-                print(f"Minimum Archive Size {humanfriendly.format_size(minsize)} reached, Expected size: {humanfriendly.format_size(sizesum)}")
+                print(
+                    f"Minimum Archive Size {humanfriendly.format_size(minsize)} reached, Expected size: {humanfriendly.format_size(sizesum)}"
+                )
                 yield self.indexcount, index_p, tartmp_p
                 self.indexcount += 1
                 # continue after yeilding file paths back to program
                 sizesum = 0
-                tartmp_p = pathlib.Path.cwd() / f'{prefix}-{self.indexcount}.DONT_DELETE.txt'  # list of files suitable for gnutar
+                tartmp_p = (
+                    pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.DONT_DELETE.txt"
+                )  # list of files suitable for gnutar
                 index_p = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
-                index = index_p.open('w')
-                tartmp = tartmp_p.open('w')
-        index.close()   # close and return for final round
+                index = index_p.open("w")
+                tartmp = tartmp_p.open("w")
+        index.close()  # close and return for final round
         tartmp.close()
         yield self.indexcount, index_p, tartmp_p
 
 
 #############  MAIN  ################
 
+
 def parse_args(args):
     """ CLI options"""
     parser = argparse.ArgumentParser(
-        description='Prepare a directory for arching',
-        epilog="Brock Palen brockp@umich.edu")
-    parser.add_argument('--dryrun',
-                        help="Print what would do but dont do it, aditional --dryrun increases how far the script runs\n 1 = Walk Filesystem and stop, 2 = Filter and create sublists",
-                        action="count",
-                        default=0)
-    parser.add_argument("path",
-                        help="path to walk",
-                        type=str)
-    parser.add_argument('-p', '--prefix',
-                        help="prefix for tar eg prefix-1.tar prefix-2.tar etc",
-                        type=str,
-                        required=True)
+        description="Prepare a directory for arching",
+        epilog="Brock Palen brockp@umich.edu",
+    )
+    parser.add_argument(
+        "--dryrun",
+        help="Print what would do but dont do it, aditional --dryrun increases how far the script runs\n 1 = Walk Filesystem and stop, 2 = Filter and create sublists",
+        action="count",
+        default=0,
+    )
+    parser.add_argument("path", help="path to walk", type=str)
+    parser.add_argument(
+        "-p",
+        "--prefix",
+        help="prefix for tar eg prefix-1.tar prefix-2.tar etc",
+        type=str,
+        required=True,
+    )
 
-    parser.add_argument('-s', '--size',
-                        help="Cutoff size for files include (eg. 10G 100M) Default 20G",
-                        type=str,
-                        default="20G")
-    parser.add_argument('-t', '--tar-size',
-                        help="Target tar size before options (eg. 10G 1T) Default 100G",
-                        type=str,
-                        default="100G")
-    parser.add_argument('--remove-files',
-                        help="Delete files as/when added to archive (CAREFUL)",
-                        action="store_true")
+    parser.add_argument(
+        "-s",
+        "--size",
+        help="Cutoff size for files include (eg. 10G 100M) Default 20G",
+        type=str,
+        default="20G",
+    )
+    parser.add_argument(
+        "-t",
+        "--tar-size",
+        help="Target tar size before options (eg. 10G 1T) Default 100G",
+        type=str,
+        default="100G",
+    )
+    parser.add_argument(
+        "--remove-files",
+        help="Delete files as/when added to archive (CAREFUL)",
+        action="store_true",
+    )
 
     verbosity = parser.add_mutually_exclusive_group()
-    verbosity.add_argument('-v', '--verbose',
-                           help="Increase messages, including files as added",
-                           action="store_true")
-    verbosity.add_argument('--tar-verbose',
-                           help="Pass -v to tar (print files as tar'd)",
-                           action="store_true")
-    verbosity.add_argument('-q', '--quiet',
-                           help="Decrease messages",
-                           action="store_true")
+    verbosity.add_argument(
+        "-v",
+        "--verbose",
+        help="Increase messages, including files as added",
+        action="store_true",
+    )
+    verbosity.add_argument(
+        "--tar-verbose",
+        help="Pass -v to tar (print files as tar'd)",
+        action="store_true",
+    )
+    verbosity.add_argument(
+        "-q", "--quiet", help="Decrease messages", action="store_true"
+    )
 
     compression = parser.add_mutually_exclusive_group()
-    compression.add_argument('-z', '--gzip',
-                             help="Compress tar with GZIP",
-                             action="store_true")
-    compression.add_argument('-j', '--bzip', '--bzip2',
-                             help="Compress tar with BZIP",
-                             action="store_true")
-    compression.add_argument('--lz4',
-                             help="Compress tar with lz4",
-                             action="store_true")
-    compression.add_argument('--xz', '--lzma',
-                             help="Compress tar with xz/lzma",
-                             action="store_true")
+    compression.add_argument(
+        "-z", "--gzip", help="Compress tar with GZIP", action="store_true"
+    )
+    compression.add_argument(
+        "-j", "--bzip", "--bzip2", help="Compress tar with BZIP", action="store_true"
+    )
+    compression.add_argument("--lz4", help="Compress tar with lz4", action="store_true")
+    compression.add_argument(
+        "--xz", "--lzma", help="Compress tar with xz/lzma", action="store_true"
+    )
 
     args = parser.parse_args(args)
     return args
 
 
-def build_list(path=False,
-               prefix=False,
-               savecache=False):
+def build_list(path=False, prefix=False, savecache=False):
     """
     scan filelist and return path to results
 
@@ -194,31 +216,29 @@ def build_list(path=False,
 
     # configure DWalk
     dwalk = DWalk(
-        inst='/home/brockp/mpifileutils/install',
-        mpirun='/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun',
-        sort='name',
-        filter=['--distribution', 'size:0,1K,1M,10M,100M,1G,10G,100G,1T'],
-        progress='10')
+        inst="/home/brockp/mpifileutils/install",
+        mpirun="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+        sort="name",
+        filter=["--distribution", "size:0,1K,1M,10M,100M,1G,10G,100G,1T"],
+        progress="10",
+    )
 
     # generate timestamp name
     today = datetime.datetime.today()
-    datestr = today.strftime('%Y-%m-%d-%H-%M-%S')
+    datestr = today.strftime("%Y-%m-%d-%H-%M-%S")
 
     # put into cwd or TMPDIR ?
     c_path = pathlib.Path.cwd() if savecache else pathlib.Path(tempfile.gettempdir())
-    cache = c_path / f'{prefix}-{datestr}.cache'
+    cache = c_path / f"{prefix}-{datestr}.cache"
     logging.debug(f"Scan saved to {cache}")
 
     # start the actual scan
-    dwalk.scanpath(path=path,
-                   cacheout=cache)
+    dwalk.scanpath(path=path, cacheout=cache)
 
     return cache
 
 
-def filter_list(path=False,
-                size=False,
-                prefix=False):
+def filter_list(path=False, size=False, prefix=False):
     """
     Take cache list and filter it into two lists
     Files greater than size and those less than
@@ -235,18 +255,18 @@ def filter_list(path=False,
 
     # configure DWalk
     under_dwalk = DWalk(
-        inst='/home/brockp/mpifileutils/install',
-        mpirun='/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun',
-        sort='name',
-        progress='10',
-        filter=['--type', 'f', '--size', f"-{size}"])
+        inst="/home/brockp/mpifileutils/install",
+        mpirun="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+        sort="name",
+        progress="10",
+        filter=["--type", "f", "--size", f"-{size}"],
+    )
 
     c_path = pathlib.Path(tempfile.gettempdir())
-    textout = c_path / f'{prefix}.under.txt'
+    textout = c_path / f"{prefix}.under.txt"
 
     # start the actual scan
-    under_dwalk.scancache(cachein=path,
-                          textout=textout)
+    under_dwalk.scancache(cachein=path, textout=textout)
 
     return textout
 
@@ -262,22 +282,24 @@ if __name__ == "__main__":
 
     # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")
-    b_args = {'path': args.path,
-              'prefix': args.prefix}
+    b_args = {"path": args.path, "prefix": args.prefix}
     cache = build_list(**b_args)
     logging.debug(f"Results of full path scan saved at {cache}")
 
     # filter for files under size
     if (not args.dryrun) or (args.dryrun == 2):
         logging.info(f"----> [Phase 1.5] Filter out files greater than {args.size}")
-        littlelist = filter_list(path=cache,
-                                 size=humanfriendly.parse_size(args.size),
-                                 prefix=cache.stem)
+        littlelist = filter_list(
+            path=cache, size=humanfriendly.parse_size(args.size), prefix=cache.stem
+        )
         # list parser
-        logging.info(f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}")
+        logging.info(
+            f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
+        )
         parser = DwalkParser(path=littlelist)
-        for index, index_p, tar_list in parser.tarlist(prefix=args.prefix,
-                                         minsize=humanfriendly.parse_size(args.tar_size)):
+        for index, index_p, tar_list in parser.tarlist(
+            prefix=args.prefix, minsize=humanfriendly.parse_size(args.tar_size)
+        ):
             logging.info(f"    Index: {index_p}")
             logging.info(f"    tar: {tar_list}")
 
@@ -285,26 +307,25 @@ if __name__ == "__main__":
             if not args.dryrun:
                 # if compression
                 # if remove
-                t_args = {'filename': f"{args.prefix}-{index}.tar"}
+                t_args = {"filename": f"{args.prefix}-{index}.tar"}
                 if args.remove_files:
-                    t_args['purge'] = True
+                    t_args["purge"] = True
                 if args.tar_verbose:
-                    t_args['verbose'] = True
+                    t_args["verbose"] = True
 
                 # compression options
                 if args.gzip:
-                    t_args['compress'] = 'GZIP'
+                    t_args["compress"] = "GZIP"
                 if args.bzip:
-                    t_args['compress'] = 'BZ2'
+                    t_args["compress"] = "BZ2"
                 if args.lz4:
-                    t_args['compress'] = 'LZ4'
+                    t_args["compress"] = "LZ4"
                 if args.xz:
-                    t_args['compress'] = 'XZ'
+                    t_args["compress"] = "XZ"
 
                 tar = SuperTar(**t_args)
                 tar.addfromfile(tar_list)
                 tar.invoke()
-
 
     # bail if --dryrun requested
     if args.dryrun:

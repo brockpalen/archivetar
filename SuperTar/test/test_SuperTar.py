@@ -13,34 +13,36 @@ sys.path.append(pathlib.Path(__file__).parent)
 from SuperTar import SuperTar
 
 
-@pytest.mark.parametrize("kwargs,expex", [
-           (
-              {'filename': 'mytar.tar'},
-               does_not_raise()
-           ),
-           (
-              {},   # missing required filename= kwarg
-               pytest.raises(BaseException)
-           )
-           ])
+@pytest.mark.parametrize(
+    "kwargs,expex",
+    [
+        ({"filename": "mytar.tar"}, does_not_raise()),
+        ({}, pytest.raises(BaseException)),  # missing required filename= kwarg
+    ],
+)
 def test_SuperTar(kwargs, expex):
     with expex:
         tar = SuperTar(**kwargs)
         pp(tar._flags)
 
-@pytest.mark.parametrize("kwargs,kresult,kwresult,expex", [
-           (
-              {'verbose': True, 'filename': 'mytar.tar'},
-              ['tar', '--sparse', '--create', '--file', 'mytar.tar', '--verbose'],
-              {'check': True},
-               does_not_raise()
-           ),
-           (
-              {'filename': 'mytar.tar'},
-              ['tar', '--sparse', '--create','--file', 'mytar.tar'],
-              {'check': True},
-               does_not_raise())
-           ])
+
+@pytest.mark.parametrize(
+    "kwargs,kresult,kwresult,expex",
+    [
+        (
+            {"verbose": True, "filename": "mytar.tar"},
+            ["tar", "--sparse", "--create", "--file", "mytar.tar", "--verbose"],
+            {"check": True},
+            does_not_raise(),
+        ),
+        (
+            {"filename": "mytar.tar"},
+            ["tar", "--sparse", "--create", "--file", "mytar.tar"],
+            {"check": True},
+            does_not_raise(),
+        ),
+    ],
+)
 @pytest.mark.xfail
 def test_SuperTar_opts_addfromfile(monkeypatch, kwargs, kresult, kwresult, expex):
     mock = Mock(spec=subprocess)
@@ -50,21 +52,24 @@ def test_SuperTar_opts_addfromfile(monkeypatch, kwargs, kresult, kwresult, expex
 
     # actual test code
     tar = SuperTar(**kwargs)
-    tar.addfromfile('/does/not/exist')
+    tar.addfromfile("/does/not/exist")
     tar.invoke()
-    kresult.append('--files-from=/does/not/exist')  # added from .addfromfile()
+    kresult.append("--files-from=/does/not/exist")  # added from .addfromfile()
     mock.assert_called_once_with(kresult, **kwresult)
 
 
-@pytest.mark.parametrize("kwargs,mreturn,expex", [
-           ({'compress': 'GZIP'}, False, BaseException),  # GZIP requested but none found
-           ({'compress': 'NOT REAL'}, '/usr/bin/gzip', BaseException),     # No real parser
-           ])
+@pytest.mark.parametrize(
+    "kwargs,mreturn,expex",
+    [
+        ({"compress": "GZIP"}, False, BaseException),  # GZIP requested but none found
+        ({"compress": "NOT REAL"}, "/usr/bin/gzip", BaseException),  # No real parser
+    ],
+)
 def test_SuperTar_ops_comp(monkeypatch, kwargs, mreturn, expex):
     """check how compressions handlers behave when not found or not exist"""
 
     mock = Mock(spec=shutil)
-    mock.return_value=mreturn
+    mock.return_value = mreturn
     monkeypatch.setattr(shutil, "which", mock)
 
     with pytest.raises(expex):

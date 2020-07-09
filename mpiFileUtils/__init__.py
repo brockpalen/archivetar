@@ -8,18 +8,21 @@ logging.getLogger(__name__).addHandler(logging.NullHandler)
 
 class mpiFileUtils:
     """wrapper class for github.io/hpc/mpifileutils"""
-    def __init__(self,
-                 np=int(12),   # MPI ranks to start
-                 inst=False,   # path to mpiFileUtils install
-                 mpirun=False):
+
+    def __init__(
+        self,
+        np=int(12),  # MPI ranks to start
+        inst=False,  # path to mpiFileUtils install
+        mpirun=False,
+    ):
 
         if not mpirun:
             raise mpirunError("mpirun required")
         else:
             self.args = [mpirun]
 
-        self.args.append('--oversubscribe')
-        self.args += ['-np', f"{np}"]
+        self.args.append("--oversubscribe")
+        self.args += ["-np", f"{np}"]
 
         self.inst = inst
 
@@ -35,12 +38,10 @@ class mpiFileUtils:
 
 class DWalk(mpiFileUtils):
     """wrapper for dwalk"""
-    def __init__(self,
-                 sort=False,
-                 filter=False,
-                 progress=False,
-                 exe='dwalk',
-                 *kargs, **kwargs):
+
+    def __init__(
+        self, sort=False, filter=False, progress=False, exe="dwalk", *kargs, **kwargs
+    ):
         super().__init__(*kargs, **kwargs)
 
         # add exeutable  before options
@@ -48,19 +49,16 @@ class DWalk(mpiFileUtils):
         self.args.append(f"{self.inst}/bin/{exe}")
 
         if sort:
-            self.args += ['--sort', str(sort)]
+            self.args += ["--sort", str(sort)]
 
         if filter:
             # can be many options -atime +60 -user user etc
             self.args += filter
 
         if progress:
-            self.args += ['--progress', str(progress)]
+            self.args += ["--progress", str(progress)]
 
-    def scanpath(self,
-                 path=False,
-                 textout=False,
-                 cacheout=False):
+    def scanpath(self, path=False, textout=False, cacheout=False):
         """walk a path on filesystem"""
 
         self._setoutput(textout=textout, cacheout=cacheout)
@@ -74,33 +72,28 @@ class DWalk(mpiFileUtils):
         # actually run it
         self.apply()
 
-    def scancache(self,
-                  cachein=False,
-                  textout=False,
-                  cacheout=False):
+    def scancache(self, cachein=False, textout=False, cacheout=False):
         """pass cache file from prior scan"""
         if not cachein:
             logging.error("cachein required")
             raise mpiFileUtilsError("cache in required")
         else:
-            self.args += ['--input', str(cachein)]
+            self.args += ["--input", str(cachein)]
 
         self._setoutput(textout=textout, cacheout=cacheout)
         # actually run it
         self.apply()
 
-    def _setoutput(self,
-                   textout=False,
-                   cacheout=False):
+    def _setoutput(self, textout=False, cacheout=False):
         """ stay DRY """
         if textout:
-            self.args += ['--text-output', f"{textout}"]
+            self.args += ["--text-output", f"{textout}"]
             self.textout = textout
         else:
             self.textout = None
 
         if cacheout:
-            self.args += ['--output', f"{cacheout}"]
+            self.args += ["--output", f"{cacheout}"]
             self.cacheout = cacheout
         else:
             self.cacheout = None

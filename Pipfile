@@ -13,6 +13,7 @@ pytest-cov = "*"
 codecov = "*"
 pydocstyle = "*"
 bandit = "*"
+black = "==19.10b0"
 
 [packages]
 humanfriendly = "*"
