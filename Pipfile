@@ -16,6 +16,7 @@ bandit = "*"
 black = "==19.10b0"
 pre-commit = "*"
 yamllint = "*"
+pyinstaller = "*"
 
 [packages]
 humanfriendly = "*"
