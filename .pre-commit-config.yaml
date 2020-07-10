@@ -29,3 +29,4 @@ repos:
         language: system
         entry: pipenv run pytest --no-cov
         types: [python]
+        pass_filenames: false

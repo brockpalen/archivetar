@@ -29,6 +29,7 @@ import sys
 import tempfile
 
 import humanfriendly
+from dotenv import find_dotenv, load_dotenv
 
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
@@ -216,8 +217,11 @@ def build_list(path=False, prefix=False, savecache=False):
 
     # configure DWalk
     dwalk = DWalk(
-        inst="/home/brockp/mpifileutils/install",
-        mpirun="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=os.getenv(
+            "AT_MPIRUN",
+            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+        ),
         sort="name",
         filter=["--distribution", "size:0,1K,1M,10M,100M,1G,10G,100G,1T"],
         progress="10",
@@ -255,8 +259,11 @@ def filter_list(path=False, size=False, prefix=False):
 
     # configure DWalk
     under_dwalk = DWalk(
-        inst="/home/brockp/mpifileutils/install",
-        mpirun="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=os.getenv(
+            "AT_MPIRUN",
+            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+        ),
         sort="name",
         progress="10",
         filter=["--type", "f", "--size", f"-{size}"],
@@ -279,6 +286,9 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    # load in config from .env
+    load_dotenv(find_dotenv(), verbose=args.verbose)
 
     # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")

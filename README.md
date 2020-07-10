@@ -50,8 +50,6 @@ archivetar doesn't try to replace tar. Actaully it uses it internally rather tha
 Usage
 -----
 
-NOT COMPLETE/Working
-
 ### Quick Start
 
 Uses default settings and will create `archivetar-1.tar archivetar-2.tar ... archivetar-N.tar`
@@ -89,10 +87,19 @@ Building archivetar
 
 ### Requirements
 
- * [mpiFileUtils](https://github.com/hpc/mpifileutils) `dwalk` is required. Contributions for a MPI free version using `os.walk()` desired
+ * Patched [mpiFileUtils](https://github.com/brockp/mpifileutils) `build.sh` is a shortcut
  * python3.6+
- * pip install pipenv
- * pipenv install
+ * `pip install pipenv`
+ * `pipenv install`
+
+### Configuration
+
+Archivetar uses envrionment for configuration
+
+```
+AT_MPIFILEUTILS=<path to mpifileutils install>
+AT_MPIRUN=<path to mpirun used with mpifileutils>
+```
 
 #### Dev options
 
