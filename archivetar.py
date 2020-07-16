@@ -22,6 +22,7 @@
 import argparse
 import datetime
 import logging
+import multiprocessing as mp
 import os
 import pathlib
 import re
@@ -169,6 +170,13 @@ def parse_args(args):
         help="Delete files as/when added to archive (CAREFUL)",
         action="store_true",
     )
+    num_cores = round(mp.cpu_count() / 4)
+    parser.add_argument(
+        "--tar-processes",
+        help=f"Number of parallel tars to invoke a once. Default {num_cores} is dynamic.  Increase for iop bound not using compression",
+        type=int,
+        default=num_cores,
+    )
 
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument(
@@ -278,6 +286,23 @@ def filter_list(path=False, size=False, prefix=False):
     return textout
 
 
+def process(q, iolock):
+    while True:
+        args = q.get()  # tuple (t_args, tar_list)
+        if args is None:
+            break
+        with iolock:
+            t_args, tar_list = args
+            tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
+            tar.addfromfile(tar_list)
+        tar.invoke()  # this is the long running portion so let run outside the lock it prints nothing anyway
+        filesize = pathlib.Path(tar.filename).stat().st_size
+        with iolock:
+            logging.info(
+                f"Complete {tar.filename} Size: {humanfriendly.format_size(filesize)}"
+            )
+
+
 if __name__ == "__main__":
     args = parse_args(sys.argv[1:])
     if args.quiet:
@@ -307,6 +332,11 @@ if __name__ == "__main__":
             f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
         )
         parser = DwalkParser(path=littlelist)
+
+        # start parallel pool
+        q = mp.Queue()
+        iolock = mp.Lock()
+        pool = mp.Pool(args.tar_processes, initializer=process, initargs=(q, iolock))
         for index, index_p, tar_list in parser.tarlist(
             prefix=args.prefix, minsize=humanfriendly.parse_size(args.tar_size)
         ):
@@ -333,9 +363,12 @@ if __name__ == "__main__":
                 if args.xz:
                     t_args["compress"] = "XZ"
 
-                tar = SuperTar(**t_args)
-                tar.addfromfile(tar_list)
-                tar.invoke()
+                q.put((t_args, tar_list))  # put work on the queue
+
+    for _ in range(args.tar_processes):  # tell workers we're done
+        q.put(None)
+    pool.close()
+    pool.join()
 
     # bail if --dryrun requested
     if args.dryrun:
