@@ -40,7 +40,9 @@ class DwalkLine:
     def __init__(self, line=False, relativeto=False):
         """parse dwalk output line"""
         # -rw-r--r-- bennet support 578.000  B Oct 22 2019 09:35 /scratch/support_root/support/bennet/haoransh/DDA_2D_60x70_kulow_1.batch
-        match = re.match(r"\S+\s+\S+\s+\S+\s+(\d+\.\d+)\s+(\S+)\s+.+\s(/.+)", line)
+        match = re.match(
+            rb"\S+\s+\S+\s+\S+\s+(\d+\.\d+)\s+(\S+)\s+.+\s(/.+)", line, re.DOTALL
+        )  # use re.DOTALL to match newlines in filenames
         if relativeto:
             self.relativeto = relativeto
         else:
@@ -53,6 +55,7 @@ class DwalkLine:
 
     def _normilizeunits(self, units=False, count=False):
         """convert size by SI units to Bytes"""
+        units = units.decode()  # convert binary data to string type
         if units == "B":
             return count
         elif units == "KB":
@@ -70,7 +73,7 @@ class DwalkLine:
 
     def _stripcwd(self, path):
         """dwalk print absolute paths, we need relative"""
-        return os.path.relpath(path, self.relativeto)
+        return os.path.relpath(path, self.relativeto.encode())
 
 
 class DwalkParser:
@@ -80,7 +83,7 @@ class DwalkParser:
         self.indexcount = 1
         if path.is_file():
             logging.debug(f"using {path} as input for DwalkParser")
-            self.path = path.open()
+            self.path = path.open("br")
         else:
             raise Exception(f"{self.path} doesn't exist")
 
@@ -98,13 +101,13 @@ class DwalkParser:
         )  # list of files suitable for gnutar
         index_p = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
         sizesum = 0  # size in bytes thus far
-        index = index_p.open("w")
-        tartmp = tartmp_p.open("w")
+        index = index_p.open("wb")
+        tartmp = tartmp_p.open("wb")
         for line in self.path:
             pl = DwalkLine(line=line)
             sizesum += pl.size
             index.write(line)  # already has newline
-            tartmp.write(f"{pl.path}\n")  # write doesn't append newline
+            tartmp.write(pl.path)  # already has newline (binary)
             if sizesum >= minsize:
                 # max size in tar reached
                 tartmp.close()
@@ -120,8 +123,8 @@ class DwalkParser:
                     pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.DONT_DELETE.txt"
                 )  # list of files suitable for gnutar
                 index_p = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
-                index = index_p.open("w")
-                tartmp = tartmp_p.open("w")
+                index = index_p.open("wb")
+                tartmp = tartmp_p.open("wb")
         index.close()  # close and return for final round
         tartmp.close()
         yield self.indexcount, index_p, tartmp_p
