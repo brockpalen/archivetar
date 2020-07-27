@@ -236,6 +236,7 @@ def build_list(path=False, prefix=False, savecache=False):
         sort="name",
         filter=["--distribution", "size:0,1K,1M,10M,100M,1G,10G,100G,1T"],
         progress="10",
+        umask=0o077,  # set premissions to only the user invoking
     )
 
     # generate timestamp name
@@ -278,6 +279,7 @@ def filter_list(path=False, size=False, prefix=False):
         sort="name",
         progress="10",
         filter=["--type", "f", "--size", f"-{size}"],
+        umask=0o077,  # set premissions to only the user invoking
     )
 
     c_path = pathlib.Path(tempfile.gettempdir())
@@ -368,10 +370,11 @@ if __name__ == "__main__":
 
                 q.put((t_args, tar_list))  # put work on the queue
 
-    for _ in range(args.tar_processes):  # tell workers we're done
-        q.put(None)
-    pool.close()
-    pool.join()
+        for _ in range(args.tar_processes):  # tell workers we're done
+            q.put(None)
+
+        pool.close()
+        pool.join()
 
     # bail if --dryrun requested
     if args.dryrun:

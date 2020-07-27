@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess  # nosec
 
 from mpiFileUtils.exceptions import mpiFileUtilsError, mpirunError
@@ -14,12 +15,19 @@ class mpiFileUtils:
         np=int(12),  # MPI ranks to start
         inst=False,  # path to mpiFileUtils install
         mpirun=False,
+        umask=False,
     ):
+
+        self.kwargs = {}
 
         if not mpirun:
             raise mpirunError("mpirun required")
         else:
             self.args = [mpirun]
+
+        if umask:
+            # set umask for call to subprocess
+            self.kwargs["preexec_fn"] = lambda: os.umask(umask)
 
         self.args.append("--oversubscribe")
         self.args += ["-np", f"{np}"]
@@ -30,7 +38,7 @@ class mpiFileUtils:
         """execute wrapped application"""
         logging.debug(f"BLANK invoked as {self.args}")
         try:
-            subprocess.run(self.args, check=True)  # nosec
+            subprocess.run(self.args, check=True, **self.kwargs)  # nosec
         except Exception as e:
             logging.exception(f"Problem running: {self.args} and {e}")
             raise mpiFileUtilsError(f"Problems {e}")
