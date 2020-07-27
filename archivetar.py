@@ -168,11 +168,6 @@ def parse_args(args):
         type=str,
         default="100G",
     )
-    parser.add_argument(
-        "--remove-files",
-        help="Delete files as/when added to archive (CAREFUL)",
-        action="store_true",
-    )
     num_cores = round(mp.cpu_count() / 4)
     parser.add_argument(
         "--tar-processes",
@@ -189,12 +184,21 @@ def parse_args(args):
         action="store_true",
     )
     verbosity.add_argument(
+        "-q", "--quiet", help="Decrease messages", action="store_true"
+    )
+
+    tar_opts = parser.add_argument_group(
+        title="Tar Options", description="Options to pass to underlying tar commands"
+    )
+    tar_opts.add_argument(
         "--tar-verbose",
         help="Pass -v to tar (print files as tar'd)",
         action="store_true",
     )
-    verbosity.add_argument(
-        "-q", "--quiet", help="Decrease messages", action="store_true"
+    tar_opts.add_argument(
+        "--remove-files",
+        help="Pass --remove-files to tar, Delete files as/when added to archive (CAREFUL)",
+        action="store_true",
     )
 
     compression = parser.add_mutually_exclusive_group()
