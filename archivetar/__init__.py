@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Brock Palen
 # brockp@umich.edu
 # 7/2020
@@ -311,7 +309,7 @@ def process(q, iolock):
             )
 
 
-if __name__ == "__main__":
+def main():
     args = parse_args(sys.argv[1:])
     if args.quiet:
         logging.basicConfig(level=logging.WARNING)
