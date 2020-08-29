@@ -1,6 +1,7 @@
 import logging
 import shutil
 import subprocess  # nosec
+import tarfile
 
 logging.getLogger(__name__).addHandler(logging.NullHandler)
 
@@ -86,8 +87,14 @@ def what_comp(filename):
         return "XZ"
     elif suffix in [".lz4"]:
         return "LZ4"
-    else:
+
+    # check that it's an actual tar file
+    elif tarfile.is_tarfile(filename):
+        # is a tar just without compression so continue
         return None
+    else:
+        # we don't know what this file is throw
+        raise Exception(f"{filename} has unknown compression or not tar file")
 
 
 class SuperTar:

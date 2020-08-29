@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import tarfile
 from contextlib import ExitStack as does_not_raise
 from pprint import pprint as pp
 from unittest.mock import Mock
@@ -88,6 +89,20 @@ def test_SuperTar_ops_comp(monkeypatch, kwargs, mreturn, expex):
 def test_what_comp(tmp_path, infile, expcomp):
     """Check type of compressoin a given file uses"""
     filename = tmp_path / infile
+
+    # create actual tar, only needed for last test
+    tar = tarfile.open(filename, "w")
+    tar.close()
     comptype = what_comp(filename)
 
     assert comptype == expcomp
+
+
+def test_what_comp_not_tar(tmp_path):
+    """Check we get exception if a nontar file is passed to what_comp()"""
+    filename = tmp_path / "junkfile.tar"
+    with open(filename, "a") as f:
+        f.write("test data but not a real tar!")
+
+    with pytest.raises(BaseException, match=r"has unknown compression or not tar file"):
+        what_comp(filename)
