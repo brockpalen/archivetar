@@ -91,7 +91,7 @@ Building archivetar
  * python3.6+
  * `pip install pipenv`
  * `pipenv install`
- * `pipenv run pyinstaller archivetar.py --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller bin/archivetar --onefile`   # create executable no need for pipenv
 
 ### Configuration
 
