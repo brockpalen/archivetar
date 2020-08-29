@@ -145,7 +145,6 @@ def parse_args(args):
         action="count",
         default=0,
     )
-    parser.add_argument("path", help="path to walk", type=str)
     parser.add_argument(
         "-p",
         "--prefix",
@@ -326,7 +325,7 @@ if __name__ == "__main__":
 
     # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")
-    b_args = {"path": args.path, "prefix": args.prefix}
+    b_args = {"path": ".", "prefix": args.prefix}
     cache = build_list(**b_args)
     logging.debug(f"Results of full path scan saved at {cache}")
 
