@@ -14,6 +14,8 @@
 #       c. Optionally purge
 #    4. (?) Kick out optimized untar script (pigz / lbzip2)
 
+import sys
+
 import archivetar
 
-archivetar.main()
+archivetar.main(sys.argv)

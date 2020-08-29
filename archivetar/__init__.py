@@ -309,8 +309,8 @@ def process(q, iolock):
             )
 
 
-def main():
-    args = parse_args(sys.argv[1:])
+def main(argv):
+    args = parse_args(argv[1:])
     if args.quiet:
         logging.basicConfig(level=logging.WARNING)
     elif args.verbose:
