@@ -301,7 +301,7 @@ def process(q, iolock):
             t_args, tar_list = args
             tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
             tar.addfromfile(tar_list)
-        tar.invoke()  # this is the long running portion so let run outside the lock it prints nothing anyway
+        tar.archive()  # this is the long running portion so let run outside the lock it prints nothing anyway
         filesize = pathlib.Path(tar.filename).stat().st_size
         with iolock:
             logging.info(

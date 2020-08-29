@@ -108,7 +108,7 @@ class SuperTar:
         """load from fs path eg tar -cvf output.tar /path/to/tar"""
         pass
 
-    def invoke(self):
+    def archive(self):
         """"actually kick off the tar"""
         if self.compsuffix:
             self.filename = f"{self.filename}{self.compsuffix}"
