@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from SuperTar import SuperTar
+from SuperTar import SuperTar, what_comp
 
 
 @pytest.mark.parametrize(
@@ -49,7 +49,7 @@ def test_SuperTar_opts_addfromfile(monkeypatch, kwargs, kresult, kwresult, expex
     # actual test code
     tar = SuperTar(**kwargs)
     tar.addfromfile("/does/not/exist")
-    tar.invoke()
+    tar.archive()
     kresult.append("--files-from=/does/not/exist")  # added from .addfromfile()
     mock.assert_called_once_with(kresult, **kwresult)
 
@@ -70,3 +70,24 @@ def test_SuperTar_ops_comp(monkeypatch, kwargs, mreturn, expex):
 
     with pytest.raises(expex):
         SuperTar(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "infile,expcomp",
+    [
+        ("testfile.tar.gz", "GZIP"),
+        ("testfile.tar.GZ", "GZIP"),  # Check mixed case
+        ("testfile.tar.tgz", "GZIP"),
+        ("testfile.tar.bz2", "BZ2"),
+        ("testfile.tar.xz", "XZ"),
+        ("testfile.tar.lzma", "XZ"),
+        ("testfile.tar.lz4", "LZ4"),
+        ("testfile.tar", None),
+    ],
+)
+def test_what_comp(tmp_path, infile, expcomp):
+    """Check type of compressoin a given file uses"""
+    filename = tmp_path / infile
+    comptype = what_comp(filename)
+
+    assert comptype == expcomp

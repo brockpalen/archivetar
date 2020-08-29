@@ -58,6 +58,38 @@ def find_lzma():
     return find_xz()
 
 
+def what_comp(filename):
+    """
+    Return what compression type based on file suffix passed.
+
+    Currently based on suffix could be updated to be based on FileMagic
+    Currently assumes input is a pathlib
+
+    Current known versions:
+    GZIP  .gz or .tgz
+    BZ2   .bz2
+    XZ    .xz or .lzma
+    LZ4   .lz4
+    None  None
+    """
+
+    # Grab current suffix, force lower case
+    suffix = filename.suffix
+    suffix = suffix.lower()
+
+    # GZIP
+    if suffix in [".gz", ".tgz"]:
+        return "GZIP"
+    elif suffix in [".bz2"]:
+        return "BZ2"
+    elif suffix in [".xz", ".lzma"]:
+        return "XZ"
+    elif suffix in [".lz4"]:
+        return "LZ4"
+    else:
+        return None
+
+
 class SuperTar:
     """ tar wrapper class for high speed """
 
@@ -67,16 +99,29 @@ class SuperTar:
         filename=False,  # path to file eg output.tar
         compress=False,  # compress or not False | GZIP | BZ2 | LZ4
         verbose=False,  # print extra information when arching
-        purge=False,
-    ):  # pass --remove-files
+        purge=False,  # pass --remove-files
+        extract=False,  # pass -x default is create
+    ):
 
         if not filename:  # filename needed  eg tar --file <filename>
             raise Exception("no filename given for tar")
 
         self.filename = filename
 
-        self._flags = ["tar", "--sparse", "--create"]
+        if extract:
+            # we are extracting an existing tar
+            self._flags = ["tar", "--sparse", "--extract"]
 
+        else:
+            # we are creating a tar
+            self._flags = ["tar", "--sparse", "--create"]
+
+            # are we deleting as we go?
+            if purge:
+                self._flags.append("--remove-files")
+
+        # if a compression option is given set the suffix (unused in extraction)
+        # Set the compression program
         self.compsuffix = None
         if compress == "GZIP":
             self._flags.append(f"--use-compress-program={find_gzip()}")
@@ -96,9 +141,6 @@ class SuperTar:
         if verbose:
             self._flags.append("--verbose")
             self._verbose = True
-
-        if purge:
-            self._flags.append("--remove-files")
 
     def addfromfile(self, path):
         """load list of files from file eg tar -cvf output.tar --files-from=<file>"""
