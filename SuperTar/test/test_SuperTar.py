@@ -1,14 +1,10 @@
-import pathlib
 import shutil
 import subprocess
-import sys
 from contextlib import ExitStack as does_not_raise
 from pprint import pprint as pp
 from unittest.mock import Mock
 
 import pytest
-
-sys.path.append(pathlib.Path(__file__).parent)
 
 from SuperTar import SuperTar
 
@@ -73,4 +69,4 @@ def test_SuperTar_ops_comp(monkeypatch, kwargs, mreturn, expex):
     monkeypatch.setattr(shutil, "which", mock)
 
     with pytest.raises(expex):
-        tar = SuperTar(**kwargs)
+        SuperTar(**kwargs)

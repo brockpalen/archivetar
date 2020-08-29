@@ -1,14 +1,10 @@
 import os
 import pathlib
-import sys
 from contextlib import ExitStack as does_not_raise
-from pprint import PrettyPrinter as pp
 from unittest.mock import MagicMock
 
 import pytest
 from conftest import count_files_dir, count_lines_dir
-
-sys.path.append(os.path.abspath("./"))
 
 from archivetar import DwalkLine, DwalkParser
 
@@ -34,7 +30,7 @@ def parser(example_data):
 def test_DwalkParser_doesntexist(kwargs):
     """test invalid paths"""
     with pytest.raises(BaseException):
-        parser = DwalkParser(**kwargs)
+        DwalkParser(**kwargs)
 
 
 @pytest.mark.parametrize(

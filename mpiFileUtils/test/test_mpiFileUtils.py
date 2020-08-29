@@ -1,11 +1,7 @@
-import pathlib
 import subprocess
-import sys
 from contextlib import ExitStack as does_not_raise
 
 import pytest
-
-sys.path.append(pathlib.Path(__file__).parent.parent)
 
 from mpiFileUtils import DWalk, mpiFileUtils, mpirunError
 
