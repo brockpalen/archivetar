@@ -22,16 +22,19 @@ $ find . -type f | wc -l
 
 # bundle all files < 1M, into tars 200M in size
 # Delete input files
-archivetar.py --prefix boxout --purge --size 1M --tar-size 200M .
+archivetar --prefix boxout --purge --size 1M --tar-size 200M
 
 # number of files after
 $ find . -type f | wc -l
 1831
 
 # expand 
-for x in $(ls *.tar)
+for x in $(ls boxout*.tar)
    tar -xf $x
 done
+
+# Alternative using GNU Parallel
+ls boxout*.tar | parallel -j 10 --progress tar -xf {}
 ```
 
 
@@ -55,14 +58,14 @@ Usage
 Uses default settings and will create `archivetar-1.tar archivetar-2.tar ... archivetar-N.tar`
 
 ```
-archivetar.py <path>
+archivetar
 ```
 
 ### Specify small file cutoff and size before creating a new tar
 
 ```
 # this will work, but the tar size is a minimum, so tars may be much larger than listed here
-archivetar.py --size 20G --tar-size 10G <path>
+archivetar --size 20G --tar-size 10G
 ```
 
 ### Specify prefix for tar names
@@ -70,7 +73,7 @@ archivetar.py --size 20G --tar-size 10G <path>
 This will create `project1-1.tar project1-2.tar` etc.
 
 ```
-archivetar.py --prefix project1 <path>
+archivetar --prefix project1
 ```
 
 Workflow
@@ -91,7 +94,14 @@ Building archivetar
  * python3.6+
  * `pip install pipenv`
  * `pipenv install`
- * `pipenv run pyinstaller archivetar.py --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller bin/archivetar --onefile`   # create executable no need for pipenv
+
+#### Install using PIP
+
+Archivetar does uset setuptools so it can be installed by `pip` to add to your globus config. It does require manual setup of the external mpiFileUtils but then will be avialable globally in the current active Python3 install.
+
+ * Need to still build mpiFileUtils and setup environment variables for configuration
+ * `pip install git+https://github.com/brockpalen/archivetar.git`
 
 ### Configuration
 

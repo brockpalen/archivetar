@@ -1,11 +1,7 @@
-import os
 import pathlib
-import sys
 from unittest.mock import MagicMock
 
 import pytest
-
-sys.path.append(os.path.abspath("./"))
 
 import archivetar
 from archivetar import build_list
@@ -25,7 +21,6 @@ from mpiFileUtils import DWalk
 @pytest.mark.freeze_time("2017-05-21")
 def test_build_list(kwargs, outcache, monkeypatch):
     """test build_list function inputs/output expected"""
-
     # fake dwalk
     mock_dwalk = MagicMock(spec=DWalk)
     monkeypatch.setattr(archivetar, "DWalk", mock_dwalk)

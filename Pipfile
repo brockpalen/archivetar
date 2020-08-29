@@ -21,6 +21,7 @@ pyinstaller = "*"
 [packages]
 humanfriendly = "*"
 python-dotenv = "*"
+archivetar = {editable = true, path = "."}
 
 [requires]
 python_version = "3.6"

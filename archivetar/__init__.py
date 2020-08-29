@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Brock Palen
 # brockp@umich.edu
 # 7/2020
@@ -145,7 +143,6 @@ def parse_args(args):
         action="count",
         default=0,
     )
-    parser.add_argument("path", help="path to walk", type=str)
     parser.add_argument(
         "-p",
         "--prefix",
@@ -312,8 +309,8 @@ def process(q, iolock):
             )
 
 
-if __name__ == "__main__":
-    args = parse_args(sys.argv[1:])
+def main(argv):
+    args = parse_args(argv[1:])
     if args.quiet:
         logging.basicConfig(level=logging.WARNING)
     elif args.verbose:
@@ -326,7 +323,7 @@ if __name__ == "__main__":
 
     # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")
-    b_args = {"path": args.path, "prefix": args.prefix}
+    b_args = {"path": ".", "prefix": args.prefix}
     cache = build_list(**b_args)
     logging.debug(f"Results of full path scan saved at {cache}")
 
