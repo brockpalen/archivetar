@@ -114,19 +114,17 @@ class SuperTar:
             raise Exception("no filename given for tar")
 
         self.filename = filename
+        self._purge = purge
+        self._compress = compress
 
-        if extract:
-            # we are extracting an existing tar
-            self._flags = ["tar", "--sparse", "--extract"]
+        # set inital tar options,
+        self._flags = ["tar", "--sparse"]
 
-        else:
-            # we are creating a tar
-            self._flags = ["tar", "--sparse", "--create"]
+        if verbose:
+            self._flags.append("--verbose")
+            self._verbose = True
 
-            # are we deleting as we go?
-            if purge:
-                self._flags.append("--remove-files")
-
+    def _setComp(self, compress):
         # if a compression option is given set the suffix (unused in extraction)
         # Set the compression program
         self.compsuffix = None
@@ -145,10 +143,6 @@ class SuperTar:
         elif compress:
             raise Exception("Invalid Compressor {compress}")
 
-        if verbose:
-            self._flags.append("--verbose")
-            self._verbose = True
-
     def addfromfile(self, path):
         """load list of files from file eg tar -cvf output.tar --files-from=<file>"""
         self._flags.append(f"--files-from={path}")
@@ -158,10 +152,33 @@ class SuperTar:
         pass
 
     def archive(self):
-        """"actually kick off the tar"""
+        """actually kick off the tar"""
+        # we are creating a tar
+        self._flags += ["--create"]
+
+        # set compression options suffix and program if set
+        self._setComp(self._compress)
+
+        # are we deleting as we go?
+        if self._purge:
+            self._flags.append("--remove-files")
         if self.compsuffix:
             self.filename = f"{self.filename}{self.compsuffix}"
 
         self._flags += ["--file", self.filename]
         logging.debug(f"Tar invoked with: {self._flags}")
         subprocess.run(self._flags, check=True)  # nosec
+
+    def extract(self):
+        """Extract the tar listed"""
+        # we are extracting an existing tar
+        self._flags += ["--extract"]
+        self._flags += ["--file", str(self.filename)]
+
+        # set compress program
+        self._setComp(what_comp(self.filename))
+        logging.debug(f"Tar invoked with: {self._flags}")
+        try:
+            subprocess.run(self._flags, check=True)  # nosec
+        except Exception as e:
+            logging.error(f"{e}")

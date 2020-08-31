@@ -1,11 +1,14 @@
+import os
 import shutil
 import subprocess
 import tarfile
 from contextlib import ExitStack as does_not_raise
+from pathlib import Path
 from pprint import pprint as pp
 from unittest.mock import Mock
 
 import pytest
+from conftest import count_files_dir
 
 from SuperTar import SuperTar, what_comp
 
@@ -106,3 +109,34 @@ def test_what_comp_not_tar(tmp_path):
 
     with pytest.raises(BaseException, match=r"has unknown compression or not tar file"):
         what_comp(filename)
+
+
+def test_SuperTar_extract(tmp_path):
+    """Extract a tar file"""
+
+    # set CWD
+    os.chdir(tmp_path)
+    filename = Path("junktar.tar.gz")
+    tar = tarfile.open(filename, "w:gz")
+
+    # add some fake files
+    a = tmp_path / "a"
+    a.touch()
+    tar.add("a")
+    b = tmp_path / "b"
+    b.touch()
+    tar.add("b")
+
+    # create test tar w 2 files
+    tar.close()
+
+    # remove files
+    a.unlink()
+    b.unlink()
+
+    # Try to extract
+    st = SuperTar(filename=filename, verbose=True, extract=True)
+    st.extract()
+
+    num_files = count_files_dir(tmp_path)
+    assert num_files == 3  # two files in tar + tar
