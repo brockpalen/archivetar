@@ -76,9 +76,25 @@ def find_archives(prefix):
     return tars
 
 
+def process(q, iolock):
+    """process the archives to expand them if they exist on the queue"""
+    while True:
+        args = q.get()  # tuple (t_args, archive)
+        if args is None:
+            break
+        with iolock:
+            t_args, archive = args
+            tar = SuperTar(
+                filename=archive, **t_args
+            )  # call inside the lock to keep stdout pretty
+        tar.extract()  # this is the long running portion so let run outside the lock it prints nothing anyway
+        with iolock:
+            logging.info(f"Complete {tar.filename}")
+
+
 def main(argv):
     """
-    Main event loop phases
+    Main event loop phases.
 
     1. Parse arguments and set logging
     2. Find all tars that match <prefix>-####.tar.*
@@ -91,3 +107,30 @@ def main(argv):
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    # find all archives for prefix
+    archives = find_archives(args.prefix)
+    logging.info(f"Found {len(archives)} archives with prefix {args.prefix}")
+
+    # start parallel pool
+    q = mp.Queue()
+    iolock = mp.Lock()
+    print(f"Processes: {args.tar_processes}")
+    pool = mp.Pool(args.tar_processes, initializer=process, initargs=(q, iolock))
+    for archive in archives:
+        logging.info(f"Expanding archive {archive}")
+
+        if args.dryrun:
+            logging.info("Dryrun requested will not expand")
+        else:
+            t_args = {}
+            if args.tar_verbose:
+                t_args["verbose"] = True
+
+            q.put((t_args, archive))  # put work on the queue
+
+    for _ in range(args.tar_processes):  # tell workers we're done
+        q.put(None)
+
+    pool.close()
+    pool.join()
