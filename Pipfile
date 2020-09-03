@@ -22,6 +22,7 @@ pyinstaller = "*"
 humanfriendly = "*"
 python-dotenv = "*"
 archivetar = {editable = true, path = "."}
+natsort = "*"
 
 [requires]
 python_version = "3.6"

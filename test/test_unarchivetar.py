@@ -31,12 +31,14 @@ def test_find_archives(tmp_path, prefix, suffix):
 
     # create a few files
     a1 = Path(f"{prefix}-1.tar{suffix}")
+    a10 = Path(f"{prefix}-10.tar{suffix}")
     a2 = Path(f"{prefix}-2.tar{suffix}")
     a33 = Path(f"{prefix}-33.tar{suffix}")
     a1.touch()
+    a10.touch()
     a2.touch()
     a33.touch()
 
     tars = find_archives(prefix)
 
-    assert len(tars) == 3
+    assert len(tars) == 4

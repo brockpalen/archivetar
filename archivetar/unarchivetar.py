@@ -9,6 +9,8 @@ import logging
 import multiprocessing as mp
 import pathlib
 
+from natsort import natsorted
+
 from SuperTar import SuperTar
 
 
@@ -69,7 +71,7 @@ def find_archives(prefix):
     Return array of pathlibs.Path()
     """
     p = pathlib.Path(".")
-    tars = sorted(p.glob(f"{prefix}-[0-9]*.tar*"))
+    tars = natsorted(p.glob(f"{prefix}-[0-9]*.tar*"), key=str)
 
     logging.debug(f"Found archives: {tars}")
 
@@ -115,7 +117,6 @@ def main(argv):
     # start parallel pool
     q = mp.Queue()
     iolock = mp.Lock()
-    print(f"Processes: {args.tar_processes}")
     pool = mp.Pool(args.tar_processes, initializer=process, initargs=(q, iolock))
     for archive in archives:
         logging.info(f"Expanding archive {archive}")
