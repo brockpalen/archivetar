@@ -135,7 +135,7 @@ def test_SuperTar_extract(tmp_path):
     b.unlink()
 
     # Try to extract
-    st = SuperTar(filename=filename, verbose=True, extract=True)
+    st = SuperTar(filename=filename, verbose=True)
     st.extract()
 
     num_files = count_files_dir(tmp_path)

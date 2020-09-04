@@ -107,7 +107,6 @@ class SuperTar:
         compress=False,  # compress or not False | GZIP | BZ2 | LZ4
         verbose=False,  # print extra information when arching
         purge=False,  # pass --remove-files
-        extract=False,  # pass -x default is create
     ):
 
         if not filename:  # filename needed  eg tar --file <filename>
