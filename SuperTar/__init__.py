@@ -3,6 +3,8 @@ import shutil
 import subprocess  # nosec
 import tarfile
 
+from SuperTar.exceptions import SuperTarMissmatchedOptions
+
 logging.getLogger(__name__).addHandler(logging.NullHandler)
 
 
@@ -176,16 +178,26 @@ class SuperTar:
         self._flags += ["--extract"]
         self._flags += ["--file", str(self.filename)]
 
+        # These options must be exclusive, if more than one is given outcome is ambigous
+        preserve_ops = 0
         if skip_old_files:  # --skip-old-files don't replace files that already exist
             self._flags += ["--skip-old-files"]
+            preserve_ops += 1
         if (
             keep_old_files
         ):  # --keep-old-files don't replace files that already exist and error
             self._flags += ["--keep-old-files"]
+            preserve_ops += 1
         if (
             keep_newer_files
         ):  # --keep-newer-files don't replace files that are newer than archive
             self._flags += ["--keep-newer-files"]
+            preserve_ops += 1
+
+        if preserve_ops > 1:
+            raise SuperTarMissmatchedOptions(
+                "skip_old_files keep_old_files keep_newer_files are exclusive options and cannot be combined"
+            )
 
         # set compress program
         self._setComp(what_comp(self.filename))

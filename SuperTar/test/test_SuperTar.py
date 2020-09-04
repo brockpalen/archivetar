@@ -12,6 +12,7 @@ import pytest
 from conftest import count_files_dir
 
 from SuperTar import SuperTar, what_comp
+from SuperTar.exceptions import SuperTarMissmatchedOptions
 
 
 @pytest.mark.parametrize(
@@ -153,14 +154,14 @@ def test_SuperTar_extract(tmp_path, junk_tar):
 
 
 @pytest.mark.parametrize(
-    "keyword,cli",
+    "keyword,cli,expex",
     [
-        ({"keep_old_files": True}, "--keep-old-files"),
-        ({"skip_old_files": True}, "--skip-old-files"),
-        ({"keep_newer_files": True}, "--keep-newer-files"),
+        ({"keep_old_files": True}, "--keep-old-files", does_not_raise()),
+        ({"skip_old_files": True}, "--skip-old-files", does_not_raise()),
+        ({"keep_newer_files": True}, "--keep-newer-files", does_not_raise()),
     ],
 )
-def test_SuperTar_extract_oldfiles(tmp_path, junk_tar, caplog, keyword, cli):
+def test_SuperTar_extract_preserve(tmp_path, junk_tar, caplog, keyword, cli, expex):
     """
     Tar extraction with multiple extract only options
 
@@ -171,10 +172,46 @@ def test_SuperTar_extract_oldfiles(tmp_path, junk_tar, caplog, keyword, cli):
     with caplog.at_level(logging.DEBUG):
         # Try to extract
         st = SuperTar(filename=junk_tar, verbose=True)
-        st.extract(**keyword)
+
+        with expex:
+            st.extract(**keyword)
 
         # check option eg --keep-old-files is in log text
         assert cli in caplog.text
 
         num_files = count_files_dir(tmp_path)
         assert num_files == 3  # two files in tar + tar
+
+
+@pytest.mark.parametrize(
+    "keyword,cli,expex",
+    [
+        (
+            {"keep_newer_files": True, "skip_old_files": True},
+            "--keep-newer-files",
+            pytest.raises(SuperTarMissmatchedOptions),
+        )
+    ],
+)
+def test_SuperTar_extract_preserve_errors(
+    tmp_path, junk_tar, caplog, keyword, cli, expex
+):
+    """
+    Tar extraction with multiple extract only options
+
+    SuperTar.extract()  will log.DEBUG the flags check it's included
+    """
+    os.chdir(tmp_path)
+
+    with caplog.at_level(logging.DEBUG):
+        # Try to extract
+        st = SuperTar(filename=junk_tar, verbose=True)
+
+        with expex:
+            st.extract(**keyword)
+
+        # check option eg --keep-old-files is in log text
+        #  assert cli in caplog.text  #  can't use as exception thrown
+
+        num_files = count_files_dir(tmp_path)
+        assert num_files == 1  # no untar, origonal only
