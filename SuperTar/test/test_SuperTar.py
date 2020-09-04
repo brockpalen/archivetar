@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import subprocess
@@ -111,7 +112,8 @@ def test_what_comp_not_tar(tmp_path):
         what_comp(filename)
 
 
-def test_SuperTar_extract(tmp_path):
+@pytest.fixture
+def junk_tar(tmp_path):
     """Extract a tar file"""
 
     # set CWD
@@ -134,9 +136,37 @@ def test_SuperTar_extract(tmp_path):
     a.unlink()
     b.unlink()
 
+    return filename.resolve()
+
+
+def test_SuperTar_extract(tmp_path, junk_tar):
+    """
+    Basic tar extraction test nothing fancy just untar the example and count number of files after
+    """
+    os.chdir(tmp_path)
     # Try to extract
-    st = SuperTar(filename=filename, verbose=True)
+    st = SuperTar(filename=junk_tar, verbose=True)
     st.extract()
 
     num_files = count_files_dir(tmp_path)
     assert num_files == 3  # two files in tar + tar
+
+
+def test_SuperTar_extract_oldfiles(tmp_path, junk_tar, caplog):
+    """
+    Tar extraction with --keep-old-files
+
+    SuperTar.extract()  will log.DEBUG the flags check it's included
+    """
+    os.chdir(tmp_path)
+
+    with caplog.at_level(logging.DEBUG):
+        # Try to extract
+        st = SuperTar(filename=junk_tar, verbose=True)
+        st.extract(keep_old_files=True)
+
+        # check --keep-old-files is in log text
+        assert "--keep-old-files" in caplog.text
+
+        num_files = count_files_dir(tmp_path)
+        assert num_files == 3  # two files in tar + tar

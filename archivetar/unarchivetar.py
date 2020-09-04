@@ -57,6 +57,12 @@ def parse_args(args):
         help="Pass -v to tar (print files as tar'd)",
         action="store_true",
     )
+    tar_opts.add_argument(
+        "-k",
+        "--keep-old-files",
+        help="don't replace existing files when extracting, treat them as errors",
+        action="store_true",
+    )
 
     args = parser.parse_args(args)
     return args
@@ -81,15 +87,17 @@ def find_archives(prefix):
 def process(q, iolock):
     """process the archives to expand them if they exist on the queue"""
     while True:
-        args = q.get()  # tuple (t_args, archive)
+        args = q.get()  # tuple (t_args, e_args, archive)
         if args is None:
             break
         with iolock:
-            t_args, archive = args
+            t_args, e_args, archive = args
             tar = SuperTar(
                 filename=archive, **t_args
             )  # call inside the lock to keep stdout pretty
-        tar.extract()  # this is the long running portion so let run outside the lock it prints nothing anyway
+        tar.extract(
+            **e_args
+        )  # this is the long running portion so let run outside the lock it prints nothing anyway
         with iolock:
             logging.info(f"Complete {tar.filename}")
 
@@ -124,11 +132,15 @@ def main(argv):
         if args.dryrun:
             logging.info("Dryrun requested will not expand")
         else:
-            t_args = {}
+            t_args = {}  # arguments to tar constructor
             if args.tar_verbose:
                 t_args["verbose"] = True
 
-            q.put((t_args, archive))  # put work on the queue
+            e_args = {}  # arguments to extract()
+            if args.keep_old_files:
+                e_args["keep_old_files"] = True
+
+            q.put((t_args, e_args, archive))  # put work on the queue
 
     for _ in range(args.tar_processes):  # tell workers we're done
         q.put(None)
