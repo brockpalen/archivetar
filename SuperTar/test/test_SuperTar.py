@@ -152,9 +152,16 @@ def test_SuperTar_extract(tmp_path, junk_tar):
     assert num_files == 3  # two files in tar + tar
 
 
-def test_SuperTar_extract_oldfiles(tmp_path, junk_tar, caplog):
+@pytest.mark.parametrize(
+    "keyword,cli",
+    [
+        ({"keep_old_files": True}, "--keep-old-files"),
+        ({"skip_old_files": True}, "--skip-old-files"),
+    ],
+)
+def test_SuperTar_extract_oldfiles(tmp_path, junk_tar, caplog, keyword, cli):
     """
-    Tar extraction with --keep-old-files
+    Tar extraction with multiple extract only options
 
     SuperTar.extract()  will log.DEBUG the flags check it's included
     """
@@ -163,10 +170,10 @@ def test_SuperTar_extract_oldfiles(tmp_path, junk_tar, caplog):
     with caplog.at_level(logging.DEBUG):
         # Try to extract
         st = SuperTar(filename=junk_tar, verbose=True)
-        st.extract(keep_old_files=True)
+        st.extract(**keyword)
 
-        # check --keep-old-files is in log text
-        assert "--keep-old-files" in caplog.text
+        # check option eg --keep-old-files is in log text
+        assert cli in caplog.text
 
         num_files = count_files_dir(tmp_path)
         assert num_files == 3  # two files in tar + tar
