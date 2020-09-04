@@ -168,7 +168,9 @@ class SuperTar:
         logging.debug(f"Tar invoked with: {self._flags}")
         subprocess.run(self._flags, check=True)  # nosec
 
-    def extract(self, skip_old_files=False, keep_old_files=False):
+    def extract(
+        self, skip_old_files=False, keep_old_files=False, keep_newer_files=False
+    ):
         """Extract the tar listed"""
         # we are extracting an existing tar
         self._flags += ["--extract"]
@@ -180,6 +182,10 @@ class SuperTar:
             keep_old_files
         ):  # --keep-old-files don't replace files that already exist and error
             self._flags += ["--keep-old-files"]
+        if (
+            keep_newer_files
+        ):  # --keep-newer-files don't replace files that are newer than archive
+            self._flags += ["--keep-newer-files"]
 
         # set compress program
         self._setComp(what_comp(self.filename))

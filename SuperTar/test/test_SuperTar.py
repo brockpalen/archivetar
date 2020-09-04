@@ -157,6 +157,7 @@ def test_SuperTar_extract(tmp_path, junk_tar):
     [
         ({"keep_old_files": True}, "--keep-old-files"),
         ({"skip_old_files": True}, "--skip-old-files"),
+        ({"keep_newer_files": True}, "--keep-newer-files"),
     ],
 )
 def test_SuperTar_extract_oldfiles(tmp_path, junk_tar, caplog, keyword, cli):

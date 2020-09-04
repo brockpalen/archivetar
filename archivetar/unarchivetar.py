@@ -68,6 +68,11 @@ def parse_args(args):
         help="don't replace existing files when extracting, silently skip over them",
         action="store_true",
     )
+    tar_opts.add_argument(
+        "--keep-newer-files",
+        help="don't replace existing files that are newer than their archive copies",
+        action="store_true",
+    )
 
     args = parser.parse_args(args)
     return args
@@ -146,6 +151,8 @@ def main(argv):
                 e_args["keep_old_files"] = True
             if args.skip_old_files:
                 e_args["skip_old_files"] = True
+            if args.keep_newer_files:
+                e_args["keep_newer_files"] = True
 
             q.put((t_args, e_args, archive))  # put work on the queue
 
