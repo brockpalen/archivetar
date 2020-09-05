@@ -76,6 +76,12 @@ This will create `project1-1.tar project1-2.tar` etc.
 archivetar --prefix project1
 ```
 
+### Expand archived directory
+
+```
+unarchivetar --prefix project1
+```
+
 Workflow
 ========
 
@@ -84,6 +90,7 @@ Workflow
  * Filter only files under `--size`
  * Build sub-tar's where each tar aims to be (before compression) to be at least `--min-tar-size`
  * Optionally delete files that were included in tars (delete as they are tar'd)
+ * Re-hydrate an archived directory with `unarchivetar --prefix <prefix>`
 
 Building archivetar
 -------------------
