@@ -172,6 +172,11 @@ def parse_args(args):
         type=int,
         default=num_cores,
     )
+    parser.add_argument(
+        "--save-purge-list",
+        help="Save an mpiFileUtils purge list <prefix>-<timestamp>.under.cache for files saved in tars, used to delete files under --size after archive process.  Use as alternative to --remove-files",
+        action="store_true",
+    )
 
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument(
@@ -194,7 +199,7 @@ def parse_args(args):
     )
     tar_opts.add_argument(
         "--remove-files",
-        help="Pass --remove-files to tar, Delete files as/when added to archive (CAREFUL)",
+        help="Pass --remove-files to tar, Delete files as/when added to archive (CAREFUL). --save-purge-list is safer but requires more storage space.",
         action="store_true",
     )
 
@@ -258,7 +263,7 @@ def build_list(path=False, prefix=False, savecache=False):
     return cache
 
 
-def filter_list(path=False, size=False, prefix=False):
+def filter_list(path=False, size=False, prefix=False, purgelist=False):
     """
     Take cache list and filter it into two lists
     Files greater than size and those less than
@@ -267,10 +272,13 @@ def filter_list(path=False, size=False, prefix=False):
         path (pathlib) Path to existing cache file
         size (int) size in bytes to filter on
         prefix (str) Prefix for scanfiles
+        purgelist (bool) Save the undersize  cache in CWD for purges
 
     Returns:
-        oversize (pathlib) Path to files over size
-        undersize (pathlib) Path to files under size
+        TODO o_textout (pathlib) Path to files over or equal size text format
+        TODO o_cacheout (pathlib) Path to files over or equal size mpifileutils bin format
+        u_textout (pathlib) Path to files under size text format
+        u_cacheout (pathlib) Path to files under size mpifileutils bin format
     """
 
     # configure DWalk
@@ -286,13 +294,15 @@ def filter_list(path=False, size=False, prefix=False):
         umask=0o077,  # set premissions to only the user invoking
     )
 
-    c_path = pathlib.Path(tempfile.gettempdir())
-    textout = c_path / f"{prefix}.under.txt"
+    ut_path = pathlib.Path(tempfile.gettempdir())
+    u_textout = ut_path / f"{prefix}.under.txt"
+    uc_path = pathlib.Path.cwd() if purgelist else pathlib.Path(tempfile.gettempdir())
+    u_cacheout = uc_path / f"{prefix}.under.cache"
 
     # start the actual scan
-    under_dwalk.scancache(cachein=path, textout=textout)
+    under_dwalk.scancache(cachein=path, textout=u_textout, cacheout=u_cacheout)
 
-    return textout
+    return u_textout, u_cacheout
 
 
 def process(q, iolock):
@@ -333,14 +343,18 @@ def main(argv):
     # filter for files under size
     if (not args.dryrun) or (args.dryrun == 2):
         logging.info(f"----> [Phase 1.5] Filter out files greater than {args.size}")
-        littlelist = filter_list(
-            path=cache, size=humanfriendly.parse_size(args.size), prefix=cache.stem
+
+        lists = filter_list(
+            path=cache,
+            size=humanfriendly.parse_size(args.size),
+            prefix=cache.stem,
+            purgelist=args.save_purge_list,
         )
         # list parser
         logging.info(
             f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
         )
-        parser = DwalkParser(path=littlelist)
+        parser = DwalkParser(path=lists[0])
 
         # start parallel pool
         q = mp.Queue()
