@@ -207,7 +207,10 @@ def parse_args(args):
     )
     compression.add_argument("--lz4", help="Compress tar with lz4", action="store_true")
     compression.add_argument(
-        "--xz", "--lzma", help="Compress tar with xz/lzma", action="store_true"
+        "--xz",
+        "--lzma",
+        help='Compress tar with xz/lzma\n If using xz to enable multi-threaded  set XZ_OPT="-T0 -9"',
+        action="store_true",
     )
 
     args = parser.parse_args(args)
@@ -301,7 +304,7 @@ def process(q, iolock):
         with iolock:
             tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
             tar.addfromfile(tar_list)
-        tar.invoke()  # this is the long running portion so let run outside the lock it prints nothing anyway
+        tar.archive()  # this is the long running portion so let run outside the lock it prints nothing anyway
         filesize = pathlib.Path(tar.filename).stat().st_size
         with iolock:
             logging.info(
