@@ -154,9 +154,9 @@ def parse_args(args):
     parser.add_argument(
         "-s",
         "--size",
-        help="Cutoff size for files include (eg. 10G 100M) Default 20G",
+        help="Cutoff size for files include (eg. 10G 100M)",
         type=str,
-        default="20G",
+        default=None,
     )
     parser.add_argument(
         "-t",
@@ -342,11 +342,15 @@ def main(argv):
 
     # filter for files under size
     if (not args.dryrun) or (args.dryrun == 2):
-        logging.info(f"----> [Phase 1.5] Filter out files greater than {args.size}")
-
+        filtersize = (
+            args.size if args.size else "1EB"
+        )  # Set filter to 1ExaByte if not set
+        logging.info(
+            f"----> [Phase 1.5] Filter out files greater than {filtersize} if --size given"
+        )
         lists = filter_list(
             path=cache,
-            size=humanfriendly.parse_size(args.size),
+            size=humanfriendly.parse_size(filtersize),
             prefix=cache.stem,
             purgelist=args.save_purge_list,
         )
