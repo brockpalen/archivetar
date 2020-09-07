@@ -342,19 +342,23 @@ def main(argv):
 
     # filter for files under size
     if (not args.dryrun) or (args.dryrun == 2):
-        filtersize = (
-            args.size if args.size else "1EB"
-        )  # Set filter to 1ExaByte if not set
+
+        # Set --size filter to 1ExaByte if not set
+        filtersize = args.size if args.size else "1EB"
         logging.info(
             f"----> [Phase 1.5] Filter out files greater than {filtersize} if --size given"
         )
+
+        # IN: List of files
+        # OUT: pathlib: undersize_text, undersize_cache
         lists = filter_list(
             path=cache,
             size=humanfriendly.parse_size(filtersize),
             prefix=cache.stem,
             purgelist=args.save_purge_list,
         )
-        # list parser
+
+        # Dwalk list parser
         logging.info(
             f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
         )
