@@ -110,7 +110,7 @@ class DwalkParser:
                 # max size in tar reached
                 tartmp.close()
                 index.close()
-                print(
+                logging.info(
                     f"Minimum Archive Size {humanfriendly.format_size(minsize)} reached, Expected size: {humanfriendly.format_size(sizesum)}"
                 )
                 yield self.indexcount, index_p, tartmp_p
