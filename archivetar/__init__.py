@@ -351,6 +351,9 @@ def main(argv):
     # load in config from .env
     load_dotenv(find_dotenv(), verbose=args.verbose)
 
+    # check that selected prefix is usable
+    validate_prefix(args.prefix)
+
     # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")
     b_args = {"path": ".", "prefix": args.prefix}
