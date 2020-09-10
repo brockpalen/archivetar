@@ -32,6 +32,11 @@ def parse_args(args):
         required=True,
     )
     parser.add_argument(
+        "--save-purge-list",
+        help="Don't remove purge list when complete",
+        action="store_true",
+    )
+    parser.add_argument(
         "--keep-dirs", help="Don't remove empty directories", action="store_true"
     )
 
@@ -111,9 +116,18 @@ def main(argv):
 
     drm.scancache(cachein=purge_list)
 
+    if args.dryrun:
+        logging.debug("Dryrun requested exiting")
+        sys.exit(0)
+
     # remove empty directories if requsted
-    if args.dryrun or args.keep_dirs:
+    if args.keep_dirs:
         logging.debug("Skipping removing empty directories")
     else:
         logging.debug("Removing empty directories")
         purge_empty_folders(pathlib.Path.cwd())
+
+    # remove purge list unless requsted
+    if not args.save_purge_list:
+        logging.debug("Removing purge list")
+        purge_list.unlink()
