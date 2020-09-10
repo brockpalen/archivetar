@@ -31,6 +31,9 @@ def parse_args(args):
         type=str,
         required=True,
     )
+    parser.add_argument(
+        "--keep-dirs", help="Don't remove empty directories", action="store_true"
+    )
 
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument(
@@ -45,6 +48,30 @@ def parse_args(args):
 
     args = parser.parse_args(args)
     return args
+
+
+def purge_empty_folders(path):
+    """Rcurssively remove empty folders"""
+    if not isinstance(path, pathlib.Path):
+        # make pathlib
+        path = pathlib.Path(path)
+
+    if not path.is_dir():
+        # path isn't a directory
+        logging.debug(f"{path} is not a directory returning")
+        return
+
+    # remove empty sudir
+    for f in path.iterdir():
+        if f.is_dir():
+            purge_empty_folders(f)
+
+    # remove folders if empty
+    # have to check path again count items in it
+    entries = path.iterdir()
+    if len(list(entries)) == 0:
+        logging.debug(f"Removing emptry {path}")
+        path.rmdir()
 
 
 def main(argv):
@@ -83,3 +110,10 @@ def main(argv):
     )
 
     drm.scancache(cachein=purge_list)
+
+    # remove empty directories if requsted
+    if args.dryrun or args.keep_dirs:
+        logging.debug("Skipping removing empty directories")
+    else:
+        logging.debug("Removing empty directories")
+        purge_empty_folders(pathlib.Path.cwd())
