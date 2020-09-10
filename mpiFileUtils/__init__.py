@@ -34,9 +34,12 @@ class mpiFileUtils:
         self.args += ["-np", f"{np}"]
 
         self.inst = inst
+        self.verbose = verbose  # save verbose for apply
 
     def apply(self):
         """execute wrapped application"""
+        if self.verbose:
+            self.args.append("--verbose")
         logging.debug(f"BLANK invoked as {self.args}")
         try:
             subprocess.run(self.args, check=True, **self.kwargs)  # nosec
@@ -63,6 +66,9 @@ class DRm(mpiFileUtils):
 
         if progress:
             self.args += ["--progress", str(progress)]
+
+        if dryrun:
+            self.args += ["--dryrun"]
 
     def scancache(self, cachein=False):
         """

@@ -78,9 +78,8 @@ def main(argv):
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
         ),
         progress="10",
+        verbose=args.verbose,
         **drm_kwargs,
     )
 
     drm.scancache(cachein=purge_list)
-
-    ## dryrun
