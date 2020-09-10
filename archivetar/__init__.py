@@ -30,6 +30,8 @@ import tempfile
 import humanfriendly
 from dotenv import find_dotenv, load_dotenv
 
+from archivetar.exceptions import ArchivePrefixConflict
+from archivetar.unarchivetar import find_archives
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
 
@@ -320,6 +322,21 @@ def process(q, iolock):
             logging.info(
                 f"Complete {tar.filename} Size: {humanfriendly.format_size(filesize)}"
             )
+
+
+def validate_prefix(prefix):
+    """Check that the prefix selected won't conflict with current files"""
+
+    # use find_archives from unarchivetar to use the same match
+    tars = find_archives(prefix)
+
+    if len(tars) != 0:
+        logging.critical(f"Prefix {prefix} conflicts with current files {tars}")
+        raise ArchivePrefixConflict(
+            f"Prefix {prefix} conflicts with current files {tars}"
+        )
+    else:
+        return True
 
 
 def main(argv):

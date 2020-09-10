@@ -1,10 +1,13 @@
+import os
 import pathlib
+from contextlib import ExitStack as does_not_raise
 from unittest.mock import MagicMock
 
 import pytest
 
 import archivetar
-from archivetar import build_list
+from archivetar import build_list, validate_prefix
+from archivetar.exceptions import ArchivePrefixConflict
 from mpiFileUtils import DWalk
 
 
@@ -39,3 +42,28 @@ def test_build_list(kwargs, outcache, monkeypatch):
     print(mock_dwalk.call_args)
     print(path)
     assert str(path) == outcache
+
+
+@pytest.mark.parametrize(
+    "prefix,tarname,exexception",
+    [
+        ("myprefix", "box-archive-1.tar", does_not_raise()),
+        ("myprefix", "myprefix-1.tar", pytest.raises(ArchivePrefixConflict)),
+        ("myprefix", "myprefix-1.tar.gz", pytest.raises(ArchivePrefixConflict)),
+        ("myprefix", "myprefix-1.tar.lz4", pytest.raises(ArchivePrefixConflict)),
+        ("myprefix", "myprefix-100.tar", pytest.raises(ArchivePrefixConflict)),
+    ],
+)
+def test_validate_prefix(tmp_path, prefix, tarname, exexception):
+    """
+    validate_prefix(prefix) protects against selected prefix conflicting
+
+    eg  existing myprefix-1.tar  and would be selected by unarchivetar
+    """
+
+    os.chdir(tmp_path)
+    tar = tmp_path / tarname
+    tar.touch()
+
+    with exexception:
+        validate_prefix(prefix)
