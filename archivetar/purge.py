@@ -37,7 +37,7 @@ def parse_args(args):
         action="store_true",
     )
     parser.add_argument(
-        "--keep-dirs", help="Don't remove empty directories", action="store_true"
+        "--keep-empty-dirs", help="Don't remove empty directories", action="store_true"
     )
 
     verbosity = parser.add_mutually_exclusive_group()
@@ -121,7 +121,7 @@ def main(argv):
         sys.exit(0)
 
     # remove empty directories if requsted
-    if args.keep_dirs:
+    if args.keep_empty_dirs:
         logging.debug("Skipping removing empty directories")
     else:
         logging.debug("Removing empty directories")
