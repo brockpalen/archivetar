@@ -4,25 +4,8 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-pytest = "*"
-flake8 = "*"
-isort = "*"
-pytest-flake8 = "*"
-pytest-freezegun = "*"
-pytest-cov = "*"
-codecov = "*"
-pydocstyle = "*"
-bandit = "*"
-black = "==19.10b0"
-pre-commit = "*"
-yamllint = "*"
-pyinstaller = "*"
 
 [packages]
-humanfriendly = "*"
-python-dotenv = "*"
-archivetar = {editable = true, path = "."}
-natsort = "*"
 
 [requires]
 python_version = "3.6"
