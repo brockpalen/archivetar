@@ -16,6 +16,7 @@ class mpiFileUtils:
         inst=False,  # path to mpiFileUtils install
         mpirun=False,
         umask=False,
+        verbose=False,
     ):
 
         self.kwargs = {}
@@ -33,15 +34,55 @@ class mpiFileUtils:
         self.args += ["-np", f"{np}"]
 
         self.inst = inst
+        self.verbose = verbose  # save verbose for apply
 
     def apply(self):
         """execute wrapped application"""
+        if self.verbose:
+            self.args.append("--verbose")
         logging.debug(f"BLANK invoked as {self.args}")
         try:
             subprocess.run(self.args, check=True, **self.kwargs)  # nosec
         except Exception as e:
             logging.exception(f"Problem running: {self.args} and {e}")
             raise mpiFileUtilsError(f"Problems {e}")
+
+
+class DRm(mpiFileUtils):
+    """
+    Wrapper for drm.
+    
+    progress int  seconds to print progress
+    exe      str  alternative executable name
+    dryrun   bool Don't run just print
+    """
+
+    def __init__(self, progress=False, exe="drm", dryrun=False, *kargs, **kwargs):
+        super().__init__(*kargs, **kwargs)
+
+        # add exeutable  before options
+        # BaseClass ( mpirun -np ... ) SubClass (exe { exe options } )
+        self.args.append(f"{self.inst}/bin/{exe}")
+
+        if progress:
+            self.args += ["--progress", str(progress)]
+
+        if dryrun:
+            self.args += ["--dryrun"]
+
+    def scancache(self, cachein=False):
+        """
+        Pass in .cache file as input list to use in purge.
+
+        cachein str/pathlib
+        """
+        if not cachein:
+            logging.error("cachein required")
+            raise mpiFileUtilsError("cache in required")
+        else:
+            self.args += ["--input", str(cachein)]
+
+        self.apply()
 
 
 class DWalk(mpiFileUtils):

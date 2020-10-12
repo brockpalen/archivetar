@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+
+# Brock Palen
+# brockp@umich.edu
+# 7/2020
+
+import sys
+
+import archivetar.purge
+
+archivetar.purge.main(sys.argv)

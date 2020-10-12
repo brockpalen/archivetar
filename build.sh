@@ -42,7 +42,6 @@ cd ../
 mkdir build install
 cd build
 cmake ../mpifileutils \
-  -DENABLE_EXPERIMENTAL=on \
   -DWITH_DTCMP_PREFIX=../install \
   -DWITH_LibCircle_PREFIX=../install \
   -DCMAKE_INSTALL_PREFIX=../install

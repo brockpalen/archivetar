@@ -30,6 +30,8 @@ import tempfile
 import humanfriendly
 from dotenv import find_dotenv, load_dotenv
 
+from archivetar.exceptions import ArchivePrefixConflict
+from archivetar.unarchivetar import find_archives
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
 
@@ -110,7 +112,7 @@ class DwalkParser:
                 # max size in tar reached
                 tartmp.close()
                 index.close()
-                print(
+                logging.info(
                     f"Minimum Archive Size {humanfriendly.format_size(minsize)} reached, Expected size: {humanfriendly.format_size(sizesum)}"
                 )
                 yield self.indexcount, index_p, tartmp_p
@@ -154,9 +156,9 @@ def parse_args(args):
     parser.add_argument(
         "-s",
         "--size",
-        help="Cutoff size for files include (eg. 10G 100M) Default 20G",
+        help="Cutoff size for files include (eg. 10G 100M)",
         type=str,
-        default="20G",
+        default=None,
     )
     parser.add_argument(
         "-t",
@@ -171,6 +173,11 @@ def parse_args(args):
         help=f"Number of parallel tars to invoke a once. Default {num_cores} is dynamic.  Increase for iop bound not using compression",
         type=int,
         default=num_cores,
+    )
+    parser.add_argument(
+        "--save-purge-list",
+        help="Save an mpiFileUtils purge list <prefix>-<timestamp>.under.cache for files saved in tars, used to delete files under --size after archive process.  Use as alternative to --remove-files",
+        action="store_true",
     )
 
     verbosity = parser.add_mutually_exclusive_group()
@@ -194,7 +201,7 @@ def parse_args(args):
     )
     tar_opts.add_argument(
         "--remove-files",
-        help="Pass --remove-files to tar, Delete files as/when added to archive (CAREFUL)",
+        help="Pass --remove-files to tar, Delete files as/when added to archive (CAREFUL). --save-purge-list is safer but requires more storage space.",
         action="store_true",
     )
 
@@ -258,7 +265,7 @@ def build_list(path=False, prefix=False, savecache=False):
     return cache
 
 
-def filter_list(path=False, size=False, prefix=False):
+def filter_list(path=False, size=False, prefix=False, purgelist=False):
     """
     Take cache list and filter it into two lists
     Files greater than size and those less than
@@ -267,10 +274,13 @@ def filter_list(path=False, size=False, prefix=False):
         path (pathlib) Path to existing cache file
         size (int) size in bytes to filter on
         prefix (str) Prefix for scanfiles
+        purgelist (bool) Save the undersize  cache in CWD for purges
 
     Returns:
-        oversize (pathlib) Path to files over size
-        undersize (pathlib) Path to files under size
+        TODO o_textout (pathlib) Path to files over or equal size text format
+        TODO o_cacheout (pathlib) Path to files over or equal size mpifileutils bin format
+        u_textout (pathlib) Path to files under size text format
+        u_cacheout (pathlib) Path to files under size mpifileutils bin format
     """
 
     # configure DWalk
@@ -286,13 +296,15 @@ def filter_list(path=False, size=False, prefix=False):
         umask=0o077,  # set premissions to only the user invoking
     )
 
-    c_path = pathlib.Path(tempfile.gettempdir())
-    textout = c_path / f"{prefix}.under.txt"
+    ut_path = pathlib.Path(tempfile.gettempdir())
+    u_textout = ut_path / f"{prefix}.under.txt"
+    uc_path = pathlib.Path.cwd() if purgelist else pathlib.Path(tempfile.gettempdir())
+    u_cacheout = uc_path / f"{prefix}.under.cache"
 
     # start the actual scan
-    under_dwalk.scancache(cachein=path, textout=textout)
+    under_dwalk.scancache(cachein=path, textout=u_textout, cacheout=u_cacheout)
 
-    return textout
+    return u_textout, u_cacheout
 
 
 def process(q, iolock):
@@ -312,6 +324,21 @@ def process(q, iolock):
             )
 
 
+def validate_prefix(prefix):
+    """Check that the prefix selected won't conflict with current files"""
+
+    # use find_archives from unarchivetar to use the same match
+    tars = find_archives(prefix)
+
+    if len(tars) != 0:
+        logging.critical(f"Prefix {prefix} conflicts with current files {tars}")
+        raise ArchivePrefixConflict(
+            f"Prefix {prefix} conflicts with current files {tars}"
+        )
+    else:
+        return True
+
+
 def main(argv):
     args = parse_args(argv[1:])
     if args.quiet:
@@ -324,6 +351,9 @@ def main(argv):
     # load in config from .env
     load_dotenv(find_dotenv(), verbose=args.verbose)
 
+    # check that selected prefix is usable
+    validate_prefix(args.prefix)
+
     # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")
     b_args = {"path": ".", "prefix": args.prefix}
@@ -332,15 +362,27 @@ def main(argv):
 
     # filter for files under size
     if (not args.dryrun) or (args.dryrun == 2):
-        logging.info(f"----> [Phase 1.5] Filter out files greater than {args.size}")
-        littlelist = filter_list(
-            path=cache, size=humanfriendly.parse_size(args.size), prefix=cache.stem
+
+        # Set --size filter to 1ExaByte if not set
+        filtersize = args.size if args.size else "1EB"
+        logging.info(
+            f"----> [Phase 1.5] Filter out files greater than {filtersize} if --size given"
         )
-        # list parser
+
+        # IN: List of files
+        # OUT: pathlib: undersize_text, undersize_cache
+        lists = filter_list(
+            path=cache,
+            size=humanfriendly.parse_size(filtersize),
+            prefix=cache.stem,
+            purgelist=args.save_purge_list,
+        )
+
+        # Dwalk list parser
         logging.info(
             f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
         )
-        parser = DwalkParser(path=littlelist)
+        parser = DwalkParser(path=lists[0])
 
         # start parallel pool
         q = mp.Queue()
