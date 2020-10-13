@@ -86,7 +86,7 @@ class GlobusTransfer:
     def do_native_app_authentication(self, client):
         """Does Native App Authentication Flow and returns tokens."""
         authorize_url = client.oauth2_get_authorize_url()
-        logging.info("Please go to this URL and login: \n{0}".format(authorize_url))
+        print("Please go to this URL and login: \n{0}".format(authorize_url))
 
         auth_code = input("Please enter the code you get after login here: ").strip()
         token_response = client.oauth2_exchange_code_for_tokens(auth_code)

@@ -32,6 +32,7 @@ from dotenv import find_dotenv, load_dotenv
 
 from archivetar.exceptions import ArchivePrefixConflict
 from archivetar.unarchivetar import find_archives
+from GlobusTransfer import GlobusTransfer
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
 
@@ -220,6 +221,22 @@ def parse_args(args):
         action="store_true",
     )
 
+    globus = parser.add_argument_group(
+        title="Globus Transfer Options",
+        description="Options to setup transfer of data to archive",
+    )
+    globus.add_argument(
+        "--source",
+        help="Source endpoint/collection Default Great Lakes (e0370902-9f48-11e9-821b-02b7a92d8e58)",
+        default="e0370902-9f48-11e9-821b-02b7a92d8e58",
+    )
+    globus.add_argument(
+        "--destination",
+        help="Destination endpoint/collection Default Umich#Flux (f94e0c94-f006-11e7-8219-0a208f818180)",
+        default="f94e0c94-f006-11e7-8219-0a208f818180",
+    )
+    globus.add_argument("--destination-dir", help="Directory on Destination server")
+
     args = parser.parse_args(args)
     return args
 
@@ -353,6 +370,10 @@ def main(argv):
 
     # check that selected prefix is usable
     validate_prefix(args.prefix)
+
+    # if using globus
+    if args.destination_dir:
+        globus = GlobusTransfer(args.source, args.destination, args.destination_dir)
 
     # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")
