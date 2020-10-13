@@ -321,7 +321,50 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
     # start the actual scan
     under_dwalk.scancache(cachein=path, textout=u_textout, cacheout=u_cacheout)
 
-    return u_textout, u_cacheout
+    # get the list of files larger than
+    over_dwalk = DWalk(
+        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=os.getenv(
+            "AT_MPIRUN",
+            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+        ),
+        sort="name",
+        progress="10",
+        filter=["--type", "f", "--size", f"+{size}"],
+        umask=0o077,  # set premissions to only the user invoking
+    )
+
+    ot_path = pathlib.Path(tempfile.gettempdir())
+    o_textout = ot_path / f"{prefix}.over.txt"
+
+    # start the actual scan
+    over_dwalk.scancache(cachein=path, textout=o_textout)
+
+    # get the list of files exactly equal to
+    at_dwalk = DWalk(
+        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=os.getenv(
+            "AT_MPIRUN",
+            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+        ),
+        sort="name",
+        progress="10",
+        filter=["--type", "f", "--size", f"{size}"],
+        umask=0o077,  # set premissions to only the user invoking
+    )
+
+    at_path = pathlib.Path(tempfile.gettempdir())
+    a_textout = at_path / f"{prefix}.at.txt"
+
+    # start the actual scan
+    at_dwalk.scancache(cachein=path, textout=a_textout)
+
+    # append a_textout to o_textout
+    with o_textout.open("a+") as o:
+        with a_textout.open() as a:
+            o.write(a.read())
+
+    return u_textout, u_cacheout, o_textout
 
 
 def process(q, iolock):
@@ -371,7 +414,7 @@ def main(argv):
     # check that selected prefix is usable
     validate_prefix(args.prefix)
 
-    # if using globus
+    # if using globus, init to prompt for endpoiont activation etc
     if args.destination_dir:
         globus = GlobusTransfer(args.source, args.destination, args.destination_dir)
 
@@ -391,19 +434,23 @@ def main(argv):
         )
 
         # IN: List of files
-        # OUT: pathlib: undersize_text, undersize_cache
-        lists = filter_list(
+        # OUT: pathlib: undersize_text, undersize_cache, oversize_text, atsize_text
+        under_t, under_c, over_t = filter_list(
             path=cache,
             size=humanfriendly.parse_size(filtersize),
             prefix=cache.stem,
             purgelist=args.save_purge_list,
         )
 
+        # if globus get transfer the large files
+        if args.destination_dir:
+            transfer = upload_overlist(over_t, globus)
+
         # Dwalk list parser
         logging.info(
             f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
         )
-        parser = DwalkParser(path=lists[0])
+        parser = DwalkParser(path=under_t)
 
         # start parallel pool
         q = mp.Queue()
