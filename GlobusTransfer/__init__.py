@@ -1,5 +1,8 @@
+import json
 import logging
 import os
+import stat
+from pathlib import Path
 
 import globus_sdk
 
@@ -25,26 +28,63 @@ class GlobusTransfer:
         self.TransferData = None  # start empty created as needed
         self.transfers = []
 
-        # Do OAuth flow and get tokens
-        tokens = self.do_native_app_authentication()
+        authorizer = self.get_authorizer()
 
-        # most specifically, you want these tokens as strings
-        TRANSFER_TOKEN = tokens["transfer.api.globus.org"]["access_token"]
-
-        authorizer = globus_sdk.AccessTokenAuthorizer(TRANSFER_TOKEN)
         self.tc = globus_sdk.TransferClient(authorizer=authorizer)
 
         #  attempt to auto activate each endpoint so to not stop later in the flow
         self.endpoint_autoactivate(self.ep_source)
         self.endpoint_autoactivate(self.ep_dest)
 
-    def do_native_app_authentication(self):
+    def get_authorizer(self):
+        """Create an authorizer to use with Globus Service Clients."""
+        client, tokens = self.get_tokens()
+        # most specifically, you want these tokens as strings
+        refresh_token = tokens["refresh_token"]
+
+        authorizer = globus_sdk.RefreshTokenAuthorizer(refresh_token, client)
+        return authorizer
+
+    def get_tokens(self):
         """
-        Does Native App Authentication Flow and returns tokens.
+        Get globus tokens data.
+
+        Check if  ~/.globus exists else create
+        If it exists check permissions are user only
+        If overly permissive bail
+        Try to load tokens
+        Else start authorization
         """
         client = globus_sdk.NativeAppAuthClient(self._CLIENT_ID)
-        client.oauth2_start_flow()
+        client.oauth2_start_flow(refresh_tokens=True)
 
+        save_path = Path.home() / ".globus"
+        token_file = save_path / "tokens.json"
+
+        if save_path.is_dir():  # exists and directory
+            st = os.stat(save_path)
+            logging.debug(f"{str(save_path)} exists permissions {st.st_mode}")
+            if bool(st.st_mode & stat.S_IRWXO):
+                raise Exception("~/.globus is world readable and to permissive set 700")
+            if bool(st.st_mode & stat.S_IRWXG):
+                raise Exception("~/.globus is group readable and to permissive set 700")
+        else:  # create ~/.globus
+            logging.debug(f"Creating {str(save_path)}")
+            save_path.mkdir(mode=0o700)
+
+        try:  # try and read tokens from file else create and save
+            with token_file.open() as f:
+                return client, json.load(f)
+        except FileNotFoundError:
+            tokens = self.do_native_app_authentication(client)
+            tokens = tokens["transfer.api.globus.org"]
+            with token_file.open("w") as f:
+                logging.debug("Saving tokens to {str(token_file)}")
+                json.dump(tokens, f)
+                return client, tokens
+
+    def do_native_app_authentication(self, client):
+        """Does Native App Authentication Flow and returns tokens."""
         authorize_url = client.oauth2_get_authorize_url()
         logging.info("Please go to this URL and login: \n{0}".format(authorize_url))
 
@@ -54,7 +94,7 @@ class GlobusTransfer:
         return token_response.by_resource_server
 
     def endpoint_autoactivate(self, endpoint, if_expires_in=3600):
-        """Use TransferClient.endpoint_autoactivate() to make sure the endpoint is question is active"""
+        """Use TransferClient.endpoint_autoactivate() to make sure the endpoint is question is active."""
         # attempt to auto activate if fail prompt to activate
         r = self.tc.endpoint_autoactivate(endpoint, if_expires_in=if_expires_in)
         while r["code"] == "AutoActivationFailed":
