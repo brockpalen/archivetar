@@ -245,6 +245,9 @@ def parse_args(args):
         default="f94e0c94-f006-11e7-8219-0a208f818180",
     )
     globus.add_argument("--destination-dir", help="Directory on Destination server")
+    globus.add_argument(
+        "--globus-verbose", help="Globus Verbose Logging", action="store_true"
+    )
 
     args = parser.parse_args(args)
     return args
@@ -378,10 +381,10 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
 def process(q, iolock, args):
     while True:
-        q_args = q.get()  # tuple (t_args, tar_list, args)
+        q_args = q.get()  # tuple (t_args, tar_list, index)
         if q_args is None:
             break
-        t_args, tar_list = q_args
+        t_args, tar_list, index = q_args
         with iolock:
             tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
             tar.addfromfile(tar_list)
@@ -398,6 +401,12 @@ def process(q, iolock, args):
                 path = pathlib.Path(tar.filename).resolve()
                 logging.debug(f"Adding file {path} to Globus Transfer")
                 globus.add_item(path, label=f"{path.name}")
+                tar_list = pathlib.Path(tar_list).resolve()
+                logging.debug(f"Adding file {tar_list} to Globus Transfer")
+                globus.add_item(tar_list, label=f"{path.name}")
+                index_p = pathlib.Path(index).resolve()
+                logging.debug(f"Adding file {index_p} to Globus Transfer")
+                globus.add_item(index_p, label=f"{path.name}")
                 taskid = globus.submit_pending_transfer()
                 logging.info(
                     f"Globus Transfer of Small file tar {path.name} : {taskid}"
@@ -428,9 +437,12 @@ def main(argv):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    # globus built in logger is very verbose adjust lower
+    # globus built in logger is very verbose adjust lower unless verbose
     globus_logger = logging.getLogger("globus_sdk")
-    globus_logger.setLevel(logging.WARNING)
+    urllib_logger = logging.getLogger("urllib3")
+    if not args.globus_verbose:
+        globus_logger.setLevel(logging.WARNING)
+        urllib_logger.setLevel(logging.WARNING)
 
     # load in config from .env
     load_dotenv(find_dotenv(), verbose=args.verbose)
@@ -518,7 +530,7 @@ def main(argv):
                 if args.xz:
                     t_args["compress"] = "XZ"
 
-                q.put((t_args, tar_list))  # put work on the queue
+                q.put((t_args, tar_list, index_p))  # put work on the queue
 
         for _ in range(args.tar_processes):  # tell workers we're done
             q.put(None)
