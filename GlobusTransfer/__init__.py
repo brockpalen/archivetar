@@ -112,7 +112,7 @@ class GlobusTransfer:
         for entry in self.tc.operation_ls(self.ep_source, path=self.path_source):
             print(entry["name"] + ("/" if entry["type"] == "dir" else ""))
 
-    def add_item(self, source_path):
+    def add_item(self, source_path, label="PY"):
         """Add an item to send as part of the current bundle."""
         if not self.TransferData:
             # no prior TransferData object create a new one
@@ -122,7 +122,7 @@ class GlobusTransfer:
                 self.ep_source,
                 self.ep_dest,
                 verify_checksum=True,
-                label="GlobusTransfer-PY",
+                label=f"archivetar-{label}",
             )
 
         # add item
@@ -136,7 +136,7 @@ class GlobusTransfer:
         # result dir1/data.txt
         # Final Dest path: path_dest/dir1/data.txt
         relative_paths = os.path.relpath(source_path, os.getcwd())
-        path_dest = f"{self.path_dest}/{str(relative_paths)}"
+        path_dest = f"{self.path_dest}{str(relative_paths)}"
         logging.info(f"Dest Path: {path_dest}")
 
         self.TransferData.add_item(source_path, path_dest)
@@ -153,3 +153,4 @@ class GlobusTransfer:
         transfer = self.tc.submit_transfer(self.TransferData)
         logging.info(f"Submitted Transfer: {transfer['task_id']}")
         self.transfers.append(transfer)
+        return transfer["task_id"]

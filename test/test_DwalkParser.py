@@ -59,6 +59,17 @@ def test_DwalkParser_tarlist(parser, tmp_path, kwargs, result, expex):
     )  # sample data has 69 lines * 2 (index + tar)
 
 
+def test_DwalkParser_getpath(parser):
+    """Test getting a path."""
+    path = parser.getpath()
+    path = next(path)  # advance generator
+    print(path)
+    assert (
+        path
+        == b"/scratch/support_root/support/bennet/haoransh/DDA_2D_60x70_kulow_1.batch\n"
+    )  # nosec
+
+
 @pytest.fixture
 def test_DwalkLine(monkeypatch):
 

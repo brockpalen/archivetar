@@ -38,7 +38,7 @@ from SuperTar import SuperTar
 
 
 class DwalkLine:
-    def __init__(self, line=False, relativeto=False):
+    def __init__(self, line=False, relativeto=False, stripcwd=True):
         """parse dwalk output line"""
         # -rw-r--r-- bennet support 578.000  B Oct 22 2019 09:35 /scratch/support_root/support/bennet/haoransh/DDA_2D_60x70_kulow_1.batch
         match = re.match(
@@ -52,7 +52,10 @@ class DwalkLine:
         self.size = self._normilizeunits(
             units=match[2], count=float(match[1])
         )  # size in bytes
-        self.path = self._stripcwd(match[3])
+        if stripcwd:
+            self.path = self._stripcwd(match[3])
+        else:
+            self.path = match[3]
 
     def _normilizeunits(self, units=False, count=False):
         """convert size by SI units to Bytes"""
@@ -87,6 +90,12 @@ class DwalkParser:
             self.path = path.open("br")
         else:
             raise Exception(f"{self.path} doesn't exist")
+
+    def getpath(self):
+        """Get path one line at a time."""
+        for line in self.path:
+            pl = DwalkLine(line=line, stripcwd=False)
+            yield pl.path
 
     def tarlist(
         self, prefix="archivetar", minsize=1e9 * 100  # prefix for files
@@ -444,7 +453,17 @@ def main(argv):
 
         # if globus get transfer the large files
         if args.destination_dir:
-            transfer = upload_overlist(over_t, globus)
+            # transfer = upload_overlist(over_t, globus)
+            over_p = DwalkParser(path=over_t)
+            for path in over_p.getpath():
+                path = path.rstrip(b"\n")  # strip trailing newline
+                path = path.decode("utf-8")  # convert byte array to string
+                path = pathlib.Path(path)
+                logging.debug(f"Adding file {path} to Globus Transfer")
+                globus.add_item(path, label="Over List")
+
+            taskid = globus.submit_pending_transfer()
+            logging.info(f"Globus Transfer of Oversize files: {taskid}")
 
         # Dwalk list parser
         logging.info(
