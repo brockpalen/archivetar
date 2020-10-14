@@ -116,17 +116,20 @@ class GlobusTransfer:
         """Add an item to send as part of the current bundle."""
         if not self.TransferData:
             # no prior TransferData object create a new one
-            logging.info("No prior TransferData object found creating")
+            logging.debug("No prior TransferData object found creating")
+
+            # labels can only be letters, numbers, spaces, dashes, and underscores
+            label = label.replace(".", "-")
             self.TransferData = globus_sdk.TransferData(
                 self.tc,
                 self.ep_source,
                 self.ep_dest,
                 verify_checksum=True,
-                label=f"archivetar-{label}",
+                label=f"archivetar {label}",
             )
 
         # add item
-        logging.info(f"Source Path: {source_path}")
+        logging.debug(f"Source Path: {source_path}")
 
         # pathlib comes though as absolute we need just the relative string
         # then append that to the destimations path  eg:
@@ -137,7 +140,7 @@ class GlobusTransfer:
         # Final Dest path: path_dest/dir1/data.txt
         relative_paths = os.path.relpath(source_path, os.getcwd())
         path_dest = f"{self.path_dest}{str(relative_paths)}"
-        logging.info(f"Dest Path: {path_dest}")
+        logging.debug(f"Dest Path: {path_dest}")
 
         self.TransferData.add_item(source_path, path_dest)
 
@@ -151,6 +154,6 @@ class GlobusTransfer:
             return None
 
         transfer = self.tc.submit_transfer(self.TransferData)
-        logging.info(f"Submitted Transfer: {transfer['task_id']}")
+        logging.debug(f"Submitted Transfer: {transfer['task_id']}")
         self.transfers.append(transfer)
         return transfer["task_id"]

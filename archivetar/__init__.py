@@ -376,12 +376,12 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
     return u_textout, u_cacheout, o_textout
 
 
-def process(q, iolock):
+def process(q, iolock, args):
     while True:
-        args = q.get()  # tuple (t_args, tar_list)
-        if args is None:
+        q_args = q.get()  # tuple (t_args, tar_list, args)
+        if q_args is None:
             break
-        t_args, tar_list = args
+        t_args, tar_list = q_args
         with iolock:
             tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
             tar.addfromfile(tar_list)
@@ -391,6 +391,17 @@ def process(q, iolock):
             logging.info(
                 f"Complete {tar.filename} Size: {humanfriendly.format_size(filesize)}"
             )
+            if args.destination_dir:  # if globus destination is set upload
+                globus = GlobusTransfer(
+                    args.source, args.destination, args.destination_dir
+                )
+                path = pathlib.Path(tar.filename).resolve()
+                logging.debug(f"Adding file {path} to Globus Transfer")
+                globus.add_item(path, label=f"{path.name}")
+                taskid = globus.submit_pending_transfer()
+                logging.info(
+                    f"Globus Transfer of Small file tar {path.name} : {taskid}"
+                )
 
 
 def validate_prefix(prefix):
@@ -416,6 +427,10 @@ def main(argv):
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    # globus built in logger is very verbose adjust lower
+    globus_logger = logging.getLogger("globus_sdk")
+    globus_logger.setLevel(logging.WARNING)
 
     # load in config from .env
     load_dotenv(find_dotenv(), verbose=args.verbose)
@@ -452,7 +467,7 @@ def main(argv):
         )
 
         # if globus get transfer the large files
-        if args.destination_dir:
+        if args.destination_dir and not args.dryrun:
             # transfer = upload_overlist(over_t, globus)
             over_p = DwalkParser(path=over_t)
             for path in over_p.getpath():
@@ -460,7 +475,7 @@ def main(argv):
                 path = path.decode("utf-8")  # convert byte array to string
                 path = pathlib.Path(path)
                 logging.debug(f"Adding file {path} to Globus Transfer")
-                globus.add_item(path, label="Over List")
+                globus.add_item(path, label=f"Large File List {args.prefix}")
 
             taskid = globus.submit_pending_transfer()
             logging.info(f"Globus Transfer of Oversize files: {taskid}")
@@ -474,7 +489,9 @@ def main(argv):
         # start parallel pool
         q = mp.Queue()
         iolock = mp.Lock()
-        pool = mp.Pool(args.tar_processes, initializer=process, initargs=(q, iolock))
+        pool = mp.Pool(
+            args.tar_processes, initializer=process, initargs=(q, iolock, args)
+        )
         for index, index_p, tar_list in parser.tarlist(
             prefix=args.prefix, minsize=humanfriendly.parse_size(args.tar_size)
         ):
