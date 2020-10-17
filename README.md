@@ -74,6 +74,12 @@ archivetar --prefix project1
 unarchivetar --prefix project1
 ```
 
+### Upload via Globus to Archive
+
+```
+archivetar --prefix project1 --source <globus UUID>  --destination <globus UUID> --destination-path <path on archive>
+```
+
 Workflow
 ========
 
