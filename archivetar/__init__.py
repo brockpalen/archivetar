@@ -150,7 +150,7 @@ class DwalkParser:
 def parse_args(args):
     """ CLI options"""
     parser = argparse.ArgumentParser(
-        description="Prepare a directory for arching",
+        description="Prepare a directory for archive",
         epilog="Brock Palen brockp@umich.edu",
     )
     parser.add_argument(
@@ -238,15 +238,18 @@ def parse_args(args):
         title="Globus Transfer Options",
         description="Options to setup transfer of data to archive",
     )
+    source_default = env.str("AT_SOURCE", default="umich#greatlakes")
     globus.add_argument(
         "--source",
-        help="Source endpoint/collection Default Great Lakes (e0370902-9f48-11e9-821b-02b7a92d8e58)",
-        default="e0370902-9f48-11e9-821b-02b7a92d8e58",
+        help=f"Source endpoint/collection Default: {source_default}",
+        default=source_default,
     )
+
+    dest_default = env.str("AT_DESTINATION", default="umich#flux")
     globus.add_argument(
         "--destination",
-        help="Destination endpoint/collection Default Umich#Flux (f94e0c94-f006-11e7-8219-0a208f818180)",
-        default="f94e0c94-f006-11e7-8219-0a208f818180",
+        help=f"Destination endpoint/collection Default: {dest_default}",
+        default=dest_default,
     )
     globus.add_argument("--destination-dir", help="Directory on Destination server")
     globus.add_argument(
