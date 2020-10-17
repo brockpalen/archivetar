@@ -24,6 +24,7 @@ python-dotenv = "*"
 archivetar = {editable = true, path = "."}
 natsort = "*"
 globus-sdk = "*"
+environs = "*"
 
 [requires]
 python_version = "3.6"
