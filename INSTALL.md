@@ -9,6 +9,11 @@ Workflow
   * Use `--remove-files` to delete files as they are added to tar
  * Re-hydrate an archived directory with `unarchivetar --prefix <prefix>`
 
+Singularity
+-----------
+
+See `singularity` this is likely recomended for workstation and single user installs.
+
 Building archivetar
 -------------------
 

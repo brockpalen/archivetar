@@ -2,6 +2,7 @@
 *.cache
 *.txt
 *.swp
+*.sif
 
 
 # taken from https://github.com/github/gitignore/blob/master/Python.gitignore

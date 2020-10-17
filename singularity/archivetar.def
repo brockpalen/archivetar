@@ -1,0 +1,63 @@
+BootStrap: library
+From: ubuntu:20.04
+
+%post
+    apt-get -y update
+    apt-get -y install software-properties-common
+    add-apt-repository universe
+    apt-get -y update
+    apt-get -y install cmake git libopenmpi-dev wget gcc g++ libarchive-dev pkg-config libssl-dev libcap-dev python3-pip
+    apt-get -y install lbzip2 pigz liblz4-tool pixz bzip2 gzip tar libbz2-dev
+    git clone https://github.com/brockpalen/archivetar.git
+    cd archivetar
+    bash build.sh
+    pip3 install pipenv
+    pipenv install --python 3.8
+    pipenv install --python 3.8 pyinstaller
+    pipenv run pyinstaller bin/archivetar --onefile
+    pipenv run pyinstaller bin/unarchivetar --onefile
+    pipenv run pyinstaller bin/archivepurge --onefile
+    # all installed now the python and dev libraries are not used anymore
+    pipenv --rm
+    apt-get -y remove cmake git libopenmpi-dev wget gcc g++ libarchive-dev pkg-config libssl-dev libcap-dev python3-pip python3 libbz2-dev
+    apt-get -y clean
+
+%environment
+    export AT_MPIFILEUTILS=/archivetar/install
+    export AT_MPIRUN=mpirun
+    export OMPI_MCA_btl=^openib
+    export PATH=/archivetar/dist:/archivetar/install/bin:${PATH}
+
+%runscript
+    echo "Run as:"
+    echo "singularity exec archivetar.sif archivetar --help"
+
+%labels
+    Author brockp@umich.edu
+    URL https://github.com/brockpalen/archivetar/
+
+
+%help
+    Archivetar provides tools for archiving big data in services such as AWS Glacier and research HSM archives such as HPSS, DMF, and Spectrum Archive.
+    Documentation: https://github.com/brockpalen/archivetar/
+    It provides several commands
+       
+    archivetar   Primary tool to prep data for archive
+    archivepurge Purges small files that were included in tars created in archivetar
+    unarchivetar Helper utility to parallel extract tars created by archivetar
+
+    There are several other useful tools included used by Archivetar
+    
+    pigz  Multi-Threaded gzip 
+    lbzip2 Multi-Threaded bzip2
+    pixz   Multi-Threaded xz / lzma
+    lz4    Fast serial compressor
+
+    MPI File Utils
+
+    mpirun dwalk  Parallel filesystem walker
+    mpirun dfind  Parallel find
+    mpirun dcp    Parallel copy
+    mpirun drm    Parallel rm
+    mpirun dchmod Parallel chmod
+    mpirun ddup   Parallel find duplicates
