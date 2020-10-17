@@ -34,10 +34,14 @@ Archivetar does use setuptools so it can be installed by `pip` to add to your gl
 Archivetar uses environment for configuration
 
 ```
+# Required
 AT_MPIFILEUTILS=<path to mpifileutils install>
 AT_MPIRUN=<path to mpirun used with mpifileutils>
+
+# Optional 
 AT_SOURCE=<Globus UUID Default Collection>
 AT_DESTINATION=<Globus UUID Default Collection>
+AT_TAR_SIZE=<Default --tar-size>
 ```
 
 #### Dev options

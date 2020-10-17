@@ -174,12 +174,13 @@ def parse_args(args):
         type=str,
         default=None,
     )
+    tar_size = env.str("AT_TAR_SIZE", default="100G")
     parser.add_argument(
         "-t",
         "--tar-size",
-        help="Target tar size before options (eg. 10G 1T) Default 100G",
+        help=f"Target tar size before options (eg. 10G 1T) Default: {tar_size}",
         type=str,
-        default="100G",
+        default=tar_size,
     )
     num_cores = round(mp.cpu_count() / 4)
     parser.add_argument(
