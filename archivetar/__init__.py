@@ -28,13 +28,17 @@ import sys
 import tempfile
 
 import humanfriendly
-from dotenv import find_dotenv, load_dotenv
+from environs import Env
 
 from archivetar.exceptions import ArchivePrefixConflict
 from archivetar.unarchivetar import find_archives
 from GlobusTransfer import GlobusTransfer
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
+
+# load in config from .env
+env = Env()
+env.read_env()  # read .env file, if it exists
 
 
 class DwalkLine:
@@ -146,7 +150,7 @@ class DwalkParser:
 def parse_args(args):
     """ CLI options"""
     parser = argparse.ArgumentParser(
-        description="Prepare a directory for arching",
+        description="Prepare a directory for archive",
         epilog="Brock Palen brockp@umich.edu",
     )
     parser.add_argument(
@@ -170,12 +174,13 @@ def parse_args(args):
         type=str,
         default=None,
     )
+    tar_size = env.str("AT_TAR_SIZE", default="100G")
     parser.add_argument(
         "-t",
         "--tar-size",
-        help="Target tar size before options (eg. 10G 1T) Default 100G",
+        help=f"Target tar size before options (eg. 10G 1T) Default: {tar_size}",
         type=str,
-        default="100G",
+        default=tar_size,
     )
     num_cores = round(mp.cpu_count() / 4)
     parser.add_argument(
@@ -234,15 +239,18 @@ def parse_args(args):
         title="Globus Transfer Options",
         description="Options to setup transfer of data to archive",
     )
+    source_default = env.str("AT_SOURCE", default="umich#greatlakes")
     globus.add_argument(
         "--source",
-        help="Source endpoint/collection Default Great Lakes (e0370902-9f48-11e9-821b-02b7a92d8e58)",
-        default="e0370902-9f48-11e9-821b-02b7a92d8e58",
+        help=f"Source endpoint/collection Default: {source_default}",
+        default=source_default,
     )
+
+    dest_default = env.str("AT_DESTINATION", default="umich#flux")
     globus.add_argument(
         "--destination",
-        help="Destination endpoint/collection Default Umich#Flux (f94e0c94-f006-11e7-8219-0a208f818180)",
-        default="f94e0c94-f006-11e7-8219-0a208f818180",
+        help=f"Destination endpoint/collection Default: {dest_default}",
+        default=dest_default,
     )
     globus.add_argument("--destination-dir", help="Directory on Destination server")
     globus.add_argument(
@@ -268,8 +276,8 @@ def build_list(path=False, prefix=False, savecache=False):
 
     # configure DWalk
     dwalk = DWalk(
-        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
-        mpirun=os.getenv(
+        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=env.str(
             "AT_MPIRUN",
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
         ),
@@ -314,8 +322,8 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
     # configure DWalk
     under_dwalk = DWalk(
-        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
-        mpirun=os.getenv(
+        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=env.str(
             "AT_MPIRUN",
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
         ),
@@ -335,8 +343,8 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
     # get the list of files larger than
     over_dwalk = DWalk(
-        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
-        mpirun=os.getenv(
+        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=env.str(
             "AT_MPIRUN",
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
         ),
@@ -354,8 +362,8 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
     # get the list of files exactly equal to
     at_dwalk = DWalk(
-        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
-        mpirun=os.getenv(
+        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=env.str(
             "AT_MPIRUN",
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
         ),
@@ -443,9 +451,6 @@ def main(argv):
     if not args.globus_verbose:
         globus_logger.setLevel(logging.WARNING)
         urllib_logger.setLevel(logging.WARNING)
-
-    # load in config from .env
-    load_dotenv(find_dotenv(), verbose=args.verbose)
 
     # check that selected prefix is usable
     validate_prefix(args.prefix)

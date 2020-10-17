@@ -10,7 +10,7 @@ import os
 import pathlib
 import sys
 
-from dotenv import find_dotenv, load_dotenv
+from environs import Env
 
 from mpiFileUtils import DRm
 
@@ -89,7 +89,8 @@ def main(argv):
         logging.basicConfig(level=logging.INFO)
 
     # load in config from .env
-    load_dotenv(find_dotenv(), verbose=args.verbose)
+    env = Env()
+    env.read_env()  # read .env file, if it exists
 
     # check if cachefile given exists
     purge_list = pathlib.Path(args.purge_list)
@@ -104,8 +105,8 @@ def main(argv):
         drm_kwargs["dryrun"] = True
 
     drm = DRm(
-        inst=os.getenv("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
-        mpirun=os.getenv(
+        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        mpirun=env.str(
             "AT_MPIRUN",
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
         ),

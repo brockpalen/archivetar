@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "2b849ab9d76e58d5fc478cfd0a45e0e180d2e57fa24fd56294354c196de0275b"
+            "sha256": "21e4cfee7a7cf03929bf620acff4de76e113d361c89e1fd4354ce31a1054e263"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -102,6 +102,14 @@
             ],
             "version": "==3.1.1"
         },
+        "environs": {
+            "hashes": [
+                "sha256:a98005aab7613b6fe7a1af7192a5163f72a52d3348d3918e6c7a2a32e4012779",
+                "sha256:bf3fd6bc54fcfd7f512ddcb80a7781f0ced2b0c83dd123d619e9468ecdaaf537"
+            ],
+            "index": "pypi",
+            "version": "==8.0.0"
+        },
         "globus-sdk": {
             "hashes": [
                 "sha256:883a862ddd17b0f4868ec55d6697a64c13d91c41b9fa5103198d2140053abac2",
@@ -125,6 +133,14 @@
             ],
             "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3'",
             "version": "==2.10"
+        },
+        "marshmallow": {
+            "hashes": [
+                "sha256:2272273505f1644580fbc66c6b220cc78f893eb31f1ecde2af98ad28011e9811",
+                "sha256:47911dd7c641a27160f0df5fd0fe94667160ffe97f70a42c3cc18388d86098cc"
+            ],
+            "markers": "python_version >= '3.5'",
+            "version": "==3.8.0"
         },
         "natsort": {
             "hashes": [
