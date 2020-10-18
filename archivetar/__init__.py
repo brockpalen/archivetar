@@ -38,7 +38,9 @@ from SuperTar import SuperTar
 
 # load in config from .env
 env = Env()
-env.read_env()  # read .env file, if it exists
+
+# can't load breaks singularity
+# env.read_env()  # read .env file, if it exists
 
 
 class DwalkLine:

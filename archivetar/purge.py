@@ -90,7 +90,8 @@ def main(argv):
 
     # load in config from .env
     env = Env()
-    env.read_env()  # read .env file, if it exists
+    #  Can't load breaks singularity
+    #  env.read_env()  # read .env file, if it exists
 
     # check if cachefile given exists
     purge_list = pathlib.Path(args.purge_list)
