@@ -12,7 +12,7 @@ Refresh to the [Singularity Documentation](https://sylabs.io/guides/3.6/admin-gu
 Once singularity is installed you can pull the [offical image](https://cloud.sylabs.io/library/brockp/default/archivetar)
 
 ```
-singularity pull --arch amd64 library://brockp/default/archivetar:master 
+singularity pull --arch amd64 library://brockp/archivetar/archivetar:master 
 singularity run-help archivetar_master.sif 
 singularity exec archivetar_master.sif archivetar --help
 ```
@@ -21,5 +21,14 @@ singularity exec archivetar_master.sif archivetar --help
 
 ```
 singularity build --remote archivetar.sif archivetar.def
-singularity push -U  archivetar.sif library://brockp/default/archivetar:master
+singularity push -U  archivetar.sif library://brockp/archivetar/archivetar:master
+singularity push -U  archivetar.sif library://brockp/archivetar/archivetar:[tag]
 ```
+
+## Aditional Utilities
+
+The image includes several utilities used by `archivetar` but may also be useful on their own:
+
+* mpifileutils eg `mpirun dwalk --help`
+* Parallel Compressors `lbzip2` `pigz` `pixz`
+* lz4-tools

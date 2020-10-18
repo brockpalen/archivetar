@@ -10,6 +10,7 @@ From: ubuntu:20.04
     apt-get -y install lbzip2 pigz liblz4-tool pixz bzip2 gzip tar libbz2-dev
     git clone https://github.com/brockpalen/archivetar.git
     cd archivetar
+    git checkout v0.9.1
     bash build.sh
     pip3 install pipenv
     pipenv install --python 3.8
