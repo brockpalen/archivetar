@@ -7,7 +7,7 @@ From: ubuntu:20.04
     add-apt-repository universe
     apt-get -y update
     apt-get -y install cmake git libopenmpi-dev wget gcc g++ libarchive-dev pkg-config libssl-dev libcap-dev python3-pip
-    apt-get -y install lbzip2 pigz liblz4-tool pixz bzip2 gzip tar libbz2-dev
+    apt-get -y install lbzip2 pigz liblz4-tool pixz bzip2 gzip tar libbz2-dev zstd
     git clone https://github.com/brockpalen/archivetar.git
     cd archivetar
     git checkout v0.9.1

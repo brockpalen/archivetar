@@ -231,6 +231,9 @@ def parse_args(args):
     )
     compression.add_argument("--lz4", help="Compress tar with lz4", action="store_true")
     compression.add_argument(
+        "--zstd", help="Compress tar with zstd", action="store_true"
+    )
+    compression.add_argument(
         "--xz",
         "--lzma",
         help='Compress tar with xz/lzma\n If using xz to enable multi-threaded  set XZ_OPT="-T0 -9"',
@@ -530,6 +533,8 @@ def main(argv):
                 # compression options
                 if args.gzip:
                     t_args["compress"] = "GZIP"
+                if args.zstd:
+                    t_args["compress"] = "ZSTD"
                 if args.bzip:
                     t_args["compress"] = "BZ2"
                 if args.lz4:

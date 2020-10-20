@@ -61,6 +61,15 @@ def find_lzma():
     return find_xz()
 
 
+def find_zstd():
+    """find zstd if installed"""
+    zstd = shutil.which("zstd")
+    if zstd:
+        return zstd
+    else:
+        raise Exception("zstd/zst compression but no zstd found in PATH")
+
+
 def what_comp(filename):
     """
     Return what compression type based on file suffix passed.
@@ -89,6 +98,8 @@ def what_comp(filename):
         return "XZ"
     elif suffix in [".lz4"]:
         return "LZ4"
+    elif suffix in [".zst"]:
+        return "ZSTD"
 
     # check that it's an actual tar file
     elif tarfile.is_tarfile(filename):
@@ -141,6 +152,9 @@ class SuperTar:
         elif compress == "LZ4":
             self._flags.append(f"--use-compress-program={find_lz4()}")
             self.compsuffix = ".lz4"
+        elif compress == "ZSTD":
+            self._flags.append(f"--use-compress-program={find_zstd()}")
+            self.compsuffix = ".zst"
         elif compress:
             raise Exception("Invalid Compressor {compress}")
 

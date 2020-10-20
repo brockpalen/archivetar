@@ -88,6 +88,7 @@ def test_SuperTar_ops_comp(monkeypatch, kwargs, mreturn, expex):
         ("testfile.tar.xz", "XZ"),
         ("testfile.tar.lzma", "XZ"),
         ("testfile.tar.lz4", "LZ4"),
+        ("testfile.tar.zst", "ZSTD"),
         ("testfile.tar", None),
     ],
 )
