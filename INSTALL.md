@@ -23,8 +23,9 @@ Building archivetar
  * python3.6+
  * `pip install pipenv`
  * `pipenv install`
- * `pipenv run pyinstaller bin/archivetar --onefile`   # create executable no need for pipenv
- * `pipenv run pyinstaller bin/unarchivetar --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller archivetar.spec --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller archivepurge.spec --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller unarchivetar.spec --onefile`   # create executable no need for pipenv
 
 
 #### Install using PIP
