@@ -33,13 +33,13 @@ def test_SuperTar(kwargs, expex):
     [
         (
             {"verbose": True, "filename": "mytar.tar"},
-            ["tar", "--sparse", "--create", "--file", "mytar.tar", "--verbose"],
+            ["tar", "--create", "--file", "mytar.tar", "--verbose"],
             {"check": True},
             does_not_raise(),
         ),
         (
             {"filename": "mytar.tar"},
-            ["tar", "--sparse", "--create", "--file", "mytar.tar"],
+            ["tar", "--create", "--file", "mytar.tar"],
             {"check": True},
             does_not_raise(),
         ),

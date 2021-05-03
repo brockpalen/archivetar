@@ -130,7 +130,7 @@ class SuperTar:
         self._compress = compress
 
         # set inital tar options,
-        self._flags = ["tar", "--sparse"]
+        self._flags = ["tar"]
 
         if verbose:
             self._flags.append("--verbose")

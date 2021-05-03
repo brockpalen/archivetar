@@ -284,7 +284,7 @@ def build_list(path=False, prefix=False, savecache=False):
         inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
         mpirun=env.str(
             "AT_MPIRUN",
-            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.4/bin/mpirun",
         ),
         sort="name",
         filter=["--distribution", "size:0,1K,1M,10M,100M,1G,10G,100G,1T"],
