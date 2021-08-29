@@ -139,7 +139,7 @@ class GlobusTransfer:
         # result dir1/data.txt
         # Final Dest path: path_dest/dir1/data.txt
         relative_paths = os.path.relpath(source_path, os.getcwd())
-        path_dest = f"{self.path_dest}{str(relative_paths)}"
+        path_dest = Path(self.path_dest) / relative_paths
         logging.debug(f"Dest Path: {path_dest}")
 
         self.TransferData.add_item(source_path, path_dest)
