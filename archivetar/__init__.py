@@ -104,18 +104,29 @@ class DwalkParser:
             yield pl.path
 
     def tarlist(
-        self, prefix="archivetar", minsize=1e9 * 100  # prefix for files
-    ):  # min size sum of all files in list
+        self, prefix="archivetar", minsize=1e9 * 100, bundle_path=None
+    ):  # prefix for files
+        # min size sum of all files in list
+        # bundle_path where should indexes and files be created
         # OUT tar list suitable for gnutar
         # OUT index list
         """takes dwalk output walks though until sum(size) >= minsize"""
 
         logging.debug(f"minsize is set to {minsize} B")
 
+        if bundle_path:
+            # set outpath to this location
+            outpath = pathlib.Path(bundle_path)
+        else:
+            # set to cwd
+            outpath = pathlib.Path.cwd()
+
+        logging.debug(f"Indexes and lists will be written to: {outpath}")
+
         tartmp_p = (
-            pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.DONT_DELETE.txt"
+            outpath / f"{prefix}-{self.indexcount}.DONT_DELETE.txt"
         )  # list of files suitable for gnutar
-        index_p = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
+        index_p = outpath / f"{prefix}-{self.indexcount}.index.txt"
         sizesum = 0  # size in bytes thus far
         index = index_p.open("wb")
         tartmp = tartmp_p.open("wb")
@@ -136,9 +147,9 @@ class DwalkParser:
                 # continue after yeilding file paths back to program
                 sizesum = 0
                 tartmp_p = (
-                    pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.DONT_DELETE.txt"
+                    outpath / f"{prefix}-{self.indexcount}.DONT_DELETE.txt"
                 )  # list of files suitable for gnutar
-                index_p = pathlib.Path.cwd() / f"{prefix}-{self.indexcount}.index.txt"
+                index_p = outpath / f"{prefix}-{self.indexcount}.index.txt"
                 index = index_p.open("wb")
                 tartmp = tartmp_p.open("wb")
         index.close()  # close and return for final round
@@ -195,6 +206,11 @@ def parse_args(args):
         "--save-purge-list",
         help="Save an mpiFileUtils purge list <prefix>-<timestamp>.under.cache for files saved in tars, used to delete files under --size after archive process.  Use as alternative to --remove-files",
         action="store_true",
+    )
+    parser.add_argument(
+        "--bundle-path",
+        help="Alternative path to bundle tars and indexes.  Useful if directory being archived is at or over quota and cannot write tars to current location.  Defaults to CWD.",
+        default=None,
     )
 
     verbosity = parser.add_mutually_exclusive_group()
@@ -413,24 +429,24 @@ def process(q, iolock, args):
                 )
                 path = pathlib.Path(tar.filename).resolve()
                 logging.debug(f"Adding file {path} to Globus Transfer")
-                globus.add_item(path, label=f"{path.name}")
+                globus.add_item(path, label=f"{path.name}", in_root=True)
                 tar_list = pathlib.Path(tar_list).resolve()
                 logging.debug(f"Adding file {tar_list} to Globus Transfer")
-                globus.add_item(tar_list, label=f"{path.name}")
+                globus.add_item(tar_list, label=f"{path.name}", in_root=True)
                 index_p = pathlib.Path(index).resolve()
                 logging.debug(f"Adding file {index_p} to Globus Transfer")
-                globus.add_item(index_p, label=f"{path.name}")
+                globus.add_item(index_p, label=f"{path.name}", in_root=True)
                 taskid = globus.submit_pending_transfer()
                 logging.info(
                     f"Globus Transfer of Small file tar {path.name} : {taskid}"
                 )
 
 
-def validate_prefix(prefix):
+def validate_prefix(prefix, path=None):
     """Check that the prefix selected won't conflict with current files"""
 
     # use find_archives from unarchivetar to use the same match
-    tars = find_archives(prefix)
+    tars = find_archives(prefix, path)
 
     if len(tars) != 0:
         logging.critical(f"Prefix {prefix} conflicts with current files {tars}")
@@ -458,7 +474,7 @@ def main(argv):
         urllib_logger.setLevel(logging.WARNING)
 
     # check that selected prefix is usable
-    validate_prefix(args.prefix)
+    validate_prefix(args.prefix, path=args.bundle_path)
 
     # if using globus, init to prompt for endpoiont activation etc
     if args.destination_dir:
@@ -515,7 +531,9 @@ def main(argv):
             args.tar_processes, initializer=process, initargs=(q, iolock, args)
         )
         for index, index_p, tar_list in parser.tarlist(
-            prefix=args.prefix, minsize=humanfriendly.parse_size(args.tar_size)
+            prefix=args.prefix,
+            minsize=humanfriendly.parse_size(args.tar_size),
+            bundle_path=args.bundle_path,
         ):
             logging.info(f"    Index: {index_p}")
             logging.info(f"    tar: {tar_list}")
@@ -524,7 +542,13 @@ def main(argv):
             if not args.dryrun:
                 # if compression
                 # if remove
-                t_args = {"filename": f"{args.prefix}-{index}.tar"}
+                if args.bundle_path:
+                    t_args = {
+                        "filename": pathlib.Path(args.bundle_path)
+                        / f"{args.prefix}-{index}.tar"
+                    }
+                else:
+                    t_args = {"filename": f"{args.prefix}-{index}.tar"}
                 if args.remove_files:
                     t_args["purge"] = True
                 if args.tar_verbose:

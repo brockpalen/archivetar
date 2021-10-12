@@ -112,7 +112,7 @@ class GlobusTransfer:
         for entry in self.tc.operation_ls(self.ep_source, path=self.path_source):
             print(entry["name"] + ("/" if entry["type"] == "dir" else ""))
 
-    def add_item(self, source_path, label="PY"):
+    def add_item(self, source_path, label="PY", in_root=False):
         """Add an item to send as part of the current bundle."""
         if not self.TransferData:
             # no prior TransferData object create a new one
@@ -138,11 +138,18 @@ class GlobusTransfer:
         # pathlib  /home/brockp/dir1/data.txt
         # result dir1/data.txt
         # Final Dest path: path_dest/dir1/data.txt
-        relative_paths = os.path.relpath(source_path, os.getcwd())
-        path_dest = Path(self.path_dest) / relative_paths
+
+        # UNLESS in_root=True then stick the file right in the root of destination
+        if in_root:
+            path_dest = Path(self.path_dest) / source_path.name
+        else:
+            relative_paths = os.path.relpath(source_path, os.getcwd())
+            path_dest = Path(self.path_dest) / relative_paths
+
         logging.debug(f"Dest Path: {path_dest}")
 
-        self.TransferData.add_item(source_path, path_dest)
+        # convert PosixPath to string to avoid JSON serlizer issues
+        self.TransferData.add_item(str(source_path), str(path_dest))
 
         # TODO check if threshold hit
 

@@ -78,7 +78,7 @@ def parse_args(args):
     return args
 
 
-def find_archives(prefix):
+def find_archives(prefix, path=None):
     """
     Find all tar's in current directory matching pattern.
 
@@ -86,7 +86,11 @@ def find_archives(prefix):
 
     Return array of pathlibs.Path()
     """
-    p = pathlib.Path(".")
+    if path:
+        p = pathlib.Path(path)
+    else:
+        p = pathlib.Path(".")
+
     tars = natsorted(p.glob(f"{prefix}-[0-9]*.tar*"), key=str)
 
     logging.debug(f"Found archives: {tars}")
