@@ -112,6 +112,14 @@ class GlobusTransfer:
         for entry in self.tc.operation_ls(self.ep_source, path=self.path_source):
             print(entry["name"] + ("/" if entry["type"] == "dir" else ""))
 
+    def task_wait(self, task_id, timeout=60, polling_interval=60):
+        """Wait for task to finish."""
+        while not self.tc.task_wait(
+            task_id, timeout=timeout, polling_interval=polling_interval
+        ):
+            print(f"Task: {task_id} not complete")
+        print(f"Task: {task_id} is complete!")
+
     def add_item(self, source_path, label="PY", in_root=False):
         """Add an item to send as part of the current bundle."""
         if not self.TransferData:

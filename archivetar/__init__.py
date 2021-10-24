@@ -277,6 +277,11 @@ def parse_args(args):
     globus.add_argument(
         "--globus-verbose", help="Globus Verbose Logging", action="store_true"
     )
+    globus.add_argument(
+        "--wait",
+        help="Wait for Globus Transfers to finish before moving to next tar process / existing archivetar",
+        action="store_true",
+    )
 
     args = parser.parse_args(args)
     return args
@@ -364,7 +369,9 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
     # get the list of files larger than
     over_dwalk = DWalk(
-        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        inst=env.str(
+            "AT_MPIFILEUTILS", default="/sw/arcts/centos7/archivetar/0.10.0/install"
+        ),
         mpirun=env.str(
             "AT_MPIRUN",
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
@@ -383,7 +390,9 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
     # get the list of files exactly equal to
     at_dwalk = DWalk(
-        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        inst=env.str(
+            "AT_MPIFILEUTILS", default="/sw/arcts/centos7/archivetar/0.10.0/install"
+        ),
         mpirun=env.str(
             "AT_MPIRUN",
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
@@ -440,6 +449,9 @@ def process(q, iolock, args):
                 logging.info(
                     f"Globus Transfer of Small file tar {path.name} : {taskid}"
                 )
+
+                if args.wait:  # wait for globus transfers to finish
+                    globus.task_wait(taskid)
 
 
 def validate_prefix(prefix, path=None):
@@ -515,8 +527,8 @@ def main(argv):
                 logging.debug(f"Adding file {path} to Globus Transfer")
                 globus.add_item(path, label=f"Large File List {args.prefix}")
 
-            taskid = globus.submit_pending_transfer()
-            logging.info(f"Globus Transfer of Oversize files: {taskid}")
+            large_taskid = globus.submit_pending_transfer()
+            logging.info(f"Globus Transfer of Oversize files: {large_taskid}")
 
         # Dwalk list parser
         logging.info(
@@ -574,12 +586,11 @@ def main(argv):
         pool.close()
         pool.join()
 
+        # wait for large_taskid to finish
+        if args.wait:
+            globus.task_wait(large_taskid)
+
     # bail if --dryrun requested
     if args.dryrun:
         logging.info("--dryrun requested exiting")
         sys.exit(0)
-    # for list in tarlist()
-    #     SuperTar
-
-    # if globus(dest)
-    #     globus put
