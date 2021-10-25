@@ -279,7 +279,12 @@ def parse_args(args):
     )
     globus.add_argument(
         "--wait",
-        help="Wait for Globus Transfers to finish before moving to next tar process / existing archivetar",
+        help="Wait for  all Globus Transfers to finish before moving to next tar process / existing archivetar",
+        action="store_true",
+    )
+    globus.add_argument(
+        "--rm-at-files",
+        help="Remove archivetar created files (tar, index, tar-list) after globus transfer of tars",
         action="store_true",
     )
 
@@ -450,8 +455,17 @@ def process(q, iolock, args):
                     f"Globus Transfer of Small file tar {path.name} : {taskid}"
                 )
 
-                if args.wait:  # wait for globus transfers to finish
-                    globus.task_wait(taskid)
+        if (
+            args.wait or args.rm_at_files
+        ):  # wait for globus transfers to finish, in own block to avoid iolock
+            globus.task_wait(taskid)
+            if args.rm_at_files:  # delete the AT created files tar, index, etc
+                logging.info(f"Deleting {path}")
+                path.unlink()
+                logging.info(f"Deleting {tar_list}")
+                tar_list.unlink()
+                logging.info(f"Deleting {index_p}")
+                index_p.unlink()
 
 
 def validate_prefix(prefix, path=None):
