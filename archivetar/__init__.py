@@ -210,7 +210,7 @@ def build_list(path=False, prefix=False, savecache=False, filters=None):
     # put into cwd or TMPDIR ?
     c_path = pathlib.Path.cwd() if savecache else pathlib.Path(tempfile.gettempdir())
     cache = c_path / f"{prefix}-{datestr}.cache"
-    logging.debug(f"Scan saved to {cache}")
+    print(f"Scan saved to {cache}")
 
     # start the actual scan
     dwalk.scanpath(path=path, cacheout=cache)
@@ -391,11 +391,21 @@ def main(argv):
     if args.destination_dir:
         globus = GlobusTransfer(args.source, args.destination, args.destination_dir)
 
-    # scan entire filesystem
-    logging.info("----> [Phase 1] Build Global List of Files")
-    b_args = {"path": ".", "prefix": args.prefix, "filters": args}
-    cache = build_list(**b_args)
-    logging.debug(f"Results of full path scan saved at {cache}")
+    # do we have a user provided list?
+    if args.list:
+        logging.info("---> [Phase 1] Found User Provided File List")
+        cache = args.list
+    else:
+        # scan entire filesystem
+        logging.info("----> [Phase 1] Build Global List of Files")
+        b_args = {
+            "path": ".",
+            "prefix": args.prefix,
+            "savecache": args.save_list,
+            "filters": args,
+        }
+        cache = build_list(**b_args)
+        logging.debug(f"Results of full path scan saved at {cache}")
 
     # filter for files under size
     if (not args.dryrun) or (args.dryrun == 2):

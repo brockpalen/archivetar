@@ -1,6 +1,7 @@
 """archivetar CLI arguments parsing."""
 import argparse
 import multiprocessing as mp
+import pathlib
 import re
 
 from environs import Env
@@ -105,6 +106,18 @@ def parse_args(args):
         "--bundle-path",
         help="Alternative path to bundle tars and indexes.  Useful if directory being archived is at or over quota and cannot write tars to current location.  Defaults to CWD.",
         default=None,
+    )
+
+    build_list_args = parser.add_mutually_exclusive_group()
+    build_list_args.add_argument(
+        "--save-list",
+        help="Save the initial scan of target archive files (including filters)",
+        action="store_true",
+    )
+    build_list_args.add_argument(
+        "--list",
+        help="Provide a prior scan from --dryrun --save-list",
+        type=pathlib.Path,
     )
 
     verbosity = parser.add_mutually_exclusive_group()
