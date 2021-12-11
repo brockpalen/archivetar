@@ -52,6 +52,14 @@ def unix_check(string):
     raise ValueError("Intagers only, optionally prefixed with + or -")
 
 
+def file_check(string):
+    """Check if the user provided list file actaully exists."""
+    path = pathlib.Path(string)
+    if path.is_file():
+        return path
+    raise ValueError(f"file {string} not found")
+
+
 def parse_args(args):
     """CLI options.
 
@@ -117,7 +125,7 @@ def parse_args(args):
     build_list_args.add_argument(
         "--list",
         help="Provide a prior scan from --dryrun --save-list",
-        type=pathlib.Path,
+        type=file_check,
     )
 
     verbosity = parser.add_mutually_exclusive_group()

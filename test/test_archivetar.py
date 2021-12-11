@@ -7,7 +7,7 @@ import pytest
 
 import archivetar
 from archivetar import build_list, validate_prefix
-from archivetar.archive_args import stat_check, unix_check
+from archivetar.archive_args import file_check, stat_check, unix_check
 from archivetar.exceptions import ArchivePrefixConflict
 from mpiFileUtils import DWalk
 
@@ -58,6 +58,21 @@ def test_unix_check(string, exception):
     with exception:
         result = unix_check(string)
         print(result)
+
+
+def test_file_check(tmp_path):
+    """Make sure file check throw correct errors."""
+    # bogus file
+    f = tmp_path / "testfile.cache"
+
+    # test it doesn't exist
+    with pytest.raises(ValueError):
+        file_check(f)
+
+    # test it does exist
+    f.touch()
+    a = file_check(f)
+    assert a == f  # nosec
 
 
 @pytest.mark.parametrize(
