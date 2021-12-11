@@ -7,8 +7,57 @@ import pytest
 
 import archivetar
 from archivetar import build_list, validate_prefix
+from archivetar.archive_args import stat_check, unix_check
 from archivetar.exceptions import ArchivePrefixConflict
 from mpiFileUtils import DWalk
+
+
+@pytest.mark.parametrize(
+    "string,exception",
+    [
+        ("1", does_not_raise()),
+        ("-1", does_not_raise()),
+        ("+1", does_not_raise()),
+        ("9999999", does_not_raise()),
+        ("+9999999", does_not_raise()),
+        ("-9999999", does_not_raise()),
+        ("abc", pytest.raises(ValueError)),
+        ("+ 1", pytest.raises(ValueError)),
+        ("1 ", pytest.raises(ValueError)),
+        (" 1 ", pytest.raises(ValueError)),
+        (" 1", pytest.raises(ValueError)),
+        (" +1", pytest.raises(ValueError)),
+        ("1 2", pytest.raises(ValueError)),
+        ("1.2", pytest.raises(ValueError)),
+        ("+1.2", pytest.raises(ValueError)),
+        ("a2", pytest.raises(ValueError)),
+        ("$1", pytest.raises(ValueError)),
+    ],
+)
+def test_stat_check(string, exception):
+    """Test stat_check parse function for valid entries."""
+    with exception:
+        result = stat_check(string)
+        print(result)
+
+
+@pytest.mark.parametrize(
+    "string,exception",
+    [
+        ("brockp", does_not_raise()),
+        ("coe-brockp-turbo", does_not_raise()),
+        ("%", pytest.raises(ValueError)),
+        ("brockp%", pytest.raises(ValueError)),
+        ("bro ckp", pytest.raises(ValueError)),
+        ("brockp ", pytest.raises(ValueError)),
+        (" brockp", pytest.raises(ValueError)),
+    ],
+)
+def test_unix_check(string, exception):
+    """Test validation of usernames and groupnames."""
+    with exception:
+        result = unix_check(string)
+        print(result)
 
 
 @pytest.mark.parametrize(

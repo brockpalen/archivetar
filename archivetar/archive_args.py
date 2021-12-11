@@ -1,11 +1,54 @@
 """archivetar CLI arguments parsing."""
 import argparse
 import multiprocessing as mp
+import re
 
 from environs import Env
 
 # load in defaults from environment
 env = Env()
+
+
+def stat_check(string):
+    """Validate input of filter string for values like atime, mtime, ctime.
+
+    These shuld be integer values prefixed by a + or a - only with no spaces
+
+    Eg:
+        1
+        5
+        -10
+        +20
+
+    Invalid:
+        1.5
+        abc
+        $#@
+        + 5
+        a5
+
+    Return:
+        String passed in
+
+    Rasies ValueError if check doesn't pass
+    """
+    matched = re.match(r"^[+,-]?\d+$", string)
+    if bool(matched):
+        return string
+    raise ValueError("Intagers only, optionally prefixed with + or -")
+
+
+def unix_check(string):
+    """Validate input for username and group names which should be alpha numeric only with no spaces or special chars not allowed in user/group names.
+
+    Borrowed from: https://unix.stackexchange.com/questions/157426/what-is-the-regex-to-validate-linux-users
+
+    Should match 31 char unix usernames and groups
+    """
+    matched = re.match(r"^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$", string)
+    if bool(matched):
+        return string
+    raise ValueError("Intagers only, optionally prefixed with + or -")
 
 
 def parse_args(args):
@@ -73,6 +116,41 @@ def parse_args(args):
     )
     verbosity.add_argument(
         "-q", "--quiet", help="Decrease messages", action="store_true"
+    )
+
+    filter_ops = parser.add_argument_group(
+        title="Filtering Options",
+        description="Options to limit files included in the archive similar to options for unix find.  NOTICE: These should be used with care.  Improper mixing of filter and the --size option could result in unintended behavior if used without globus.",
+    )
+    filter_ops.add_argument(
+        "--atime",
+        metavar="N",
+        type=stat_check,
+        help="File was last accessed exactly N days ago. Use + for more than and - for less than N days ago (not inclusive)",
+    )
+    filter_ops.add_argument(
+        "--mtime",
+        metavar="N",
+        type=stat_check,
+        help="File data was last modified exactly N days ago. Use + for more than and - for less than N days ago (not inclusive)",
+    )
+    filter_ops.add_argument(
+        "--ctime",
+        metavar="N",
+        type=stat_check,
+        help="File status was last modified exactly N days ago. Use + for more than and - for less than N days ago (not inclusive)",
+    )
+    filter_ops.add_argument(
+        "--user",
+        metavar="username",
+        type=unix_check,
+        help="Only include files owned by username.",
+    )
+    filter_ops.add_argument(
+        "--group",
+        metavar="group",
+        type=unix_check,
+        help="Only include files owned by group.",
     )
 
     tar_opts = parser.add_argument_group(
