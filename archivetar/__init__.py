@@ -160,7 +160,7 @@ class DwalkParser:
 #############  MAIN  ################
 
 
-def build_list(path=False, prefix=False, savecache=False):
+def build_list(path=False, prefix=False, savecache=False, filters=None):
     """
     scan filelist and return path to results
 
@@ -168,10 +168,27 @@ def build_list(path=False, prefix=False, savecache=False):
         path (str/pathlib) Path to scan
         prefix (str) Prefix for scan file eg. prefix-{date}.cache
         savecache (bool) Save cache file in cwd or only in TMPDIR
+        filters (args) HACK pass in argparser for passing filter options eg --atime
 
     Returns:
         cache (pathlib) Path to cache file
     """
+
+    # build filter list
+    filter = ["--distribution", "size:0,1K,1M,10M,100M,1G,10G,100G,1T"]
+    if filters:
+        if filters.atime:
+            filter.extend(["--atime", filters.atime])
+        if filters.mtime:
+            filter.extend(["--mtime", filters.mtime])
+        if filters.ctime:
+            filter.extend(["--ctime", filters.ctime])
+        if filters.user:
+            filter.extend(["--user", filters.user])
+        if filters.group:
+            filter.extend(["--group", filters.group])
+
+    logging.debug(f"build_list filter options: {filter}")
 
     # configure DWalk
     dwalk = DWalk(
@@ -181,7 +198,7 @@ def build_list(path=False, prefix=False, savecache=False):
             default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.4/bin/mpirun",
         ),
         sort="name",
-        filter=["--distribution", "size:0,1K,1M,10M,100M,1G,10G,100G,1T"],
+        filter=filter,
         progress="10",
         umask=0o077,  # set premissions to only the user invoking
     )
@@ -376,7 +393,7 @@ def main(argv):
 
     # scan entire filesystem
     logging.info("----> [Phase 1] Build Global List of Files")
-    b_args = {"path": ".", "prefix": args.prefix}
+    b_args = {"path": ".", "prefix": args.prefix, "filters": args}
     cache = build_list(**b_args)
     logging.debug(f"Results of full path scan saved at {cache}")
 
