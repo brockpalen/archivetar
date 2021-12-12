@@ -44,43 +44,9 @@ archivetar doesn't try to replace tar. Actually  it uses it internally rather th
 Usage
 -----
 
-### Quick Start
-
-Uses default settings and will create `archivetar-1.tar archivetar-2.tar ... archivetar-N.tar`
-This will tar every file as no `--size` cutoff is provided.
-
-```
-archivetar --prefix myarchive
-```
-
-### Specify small file cutoff and size before creating a new tar
-
-```
-# this will work, but the tar size is a minimum, so tars may be much larger than listed here
-archivetar --prefix myarchive --size 20G --tar-size 10G
-```
-
-### Specify prefix for tar names
-
-This will create `project1-1.tar project1-2.tar` etc.
-
-```
-archivetar --prefix project1
-```
-
-### Expand archived directory
-
-```
-unarchivetar --prefix project1
-```
-
-### Upload via Globus to Archive
-
-```
-archivetar --prefix project1 --source <globus UUID>  --destination <globus UUID> --destination-path <path on archive>
-```
+See [USAGE.md](USAGE.md)
 
 Building archivetar
 -------------------
 
-See [INSTALL.md]
+See [INSTALL.md](INSTALL.md)
