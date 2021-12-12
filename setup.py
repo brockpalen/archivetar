@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="archivetar",
-    version="0.2.0",
+    version="0.13.1",
     author="Brock Palen",
     author_email="brockp@umich.edu",
     description="Prep folder for archive",
@@ -19,5 +19,10 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.6",
-    scripts=["bin/archivetar", "bin/unarchivetar"],
+    scripts=[
+        "bin/archivetar",
+        "bin/unarchivetar",
+        "bin/archivepurge",
+        "bin/archivescan",
+    ],
 )
