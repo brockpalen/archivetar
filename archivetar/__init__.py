@@ -307,50 +307,58 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
     return u_textout, u_cacheout, o_textout
 
 
-def process(q, iolock, args):
+def process(q, out_q, iolock, args):
     while True:
         q_args = q.get()  # tuple (t_args, tar_list, index)
         if q_args is None:
             break
-        t_args, tar_list, index = q_args
-        with iolock:
-            tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
-            tar.addfromfile(tar_list)
-        tar.archive()  # this is the long running portion so let run outside the lock it prints nothing anyway
-        filesize = pathlib.Path(tar.filename).stat().st_size
-        with iolock:
-            logging.info(
-                f"Complete {tar.filename} Size: {humanfriendly.format_size(filesize)}"
-            )
-            if args.destination_dir:  # if globus destination is set upload
-                globus = GlobusTransfer(
-                    args.source, args.destination, args.destination_dir
-                )
-                path = pathlib.Path(tar.filename).resolve()
-                logging.debug(f"Adding file {path} to Globus Transfer")
-                globus.add_item(path, label=f"{path.name}", in_root=True)
-                tar_list = pathlib.Path(tar_list).resolve()
-                logging.debug(f"Adding file {tar_list} to Globus Transfer")
-                globus.add_item(tar_list, label=f"{path.name}", in_root=True)
-                index_p = pathlib.Path(index).resolve()
-                logging.debug(f"Adding file {index_p} to Globus Transfer")
-                globus.add_item(index_p, label=f"{path.name}", in_root=True)
-                taskid = globus.submit_pending_transfer()
+        try:
+            t_args, tar_list, index = q_args
+            with iolock:
+                tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
+                tar.addfromfile(tar_list)
+            tar.archive()  # this is the long running portion so let run outside the lock it prints nothing anyway
+            filesize = pathlib.Path(tar.filename).stat().st_size
+            with iolock:
                 logging.info(
-                    f"Globus Transfer of Small file tar {path.name} : {taskid}"
+                    f"Complete {tar.filename} Size: {humanfriendly.format_size(filesize)}"
                 )
+                if args.destination_dir:  # if globus destination is set upload
+                    globus = GlobusTransfer(
+                        args.source, args.destination, args.destination_dir
+                    )
+                    path = pathlib.Path(tar.filename).resolve()
+                    logging.debug(f"Adding file {path} to Globus Transfer")
+                    globus.add_item(path, label=f"{path.name}", in_root=True)
+                    tar_list = pathlib.Path(tar_list).resolve()
+                    logging.debug(f"Adding file {tar_list} to Globus Transfer")
+                    globus.add_item(tar_list, label=f"{path.name}", in_root=True)
+                    index_p = pathlib.Path(index).resolve()
+                    logging.debug(f"Adding file {index_p} to Globus Transfer")
+                    globus.add_item(index_p, label=f"{path.name}", in_root=True)
+                    taskid = globus.submit_pending_transfer()
+                    logging.info(
+                        f"Globus Transfer of Small file tar {path.name} : {taskid}"
+                    )
 
-        if (
-            args.wait or args.rm_at_files
-        ):  # wait for globus transfers to finish, in own block to avoid iolock
-            globus.task_wait(taskid)
-            if args.rm_at_files:  # delete the AT created files tar, index, etc
-                logging.info(f"Deleting {path}")
-                path.unlink()
-                logging.info(f"Deleting {tar_list}")
-                tar_list.unlink()
-                logging.info(f"Deleting {index_p}")
-                index_p.unlink()
+            if (
+                args.wait or args.rm_at_files
+            ):  # wait for globus transfers to finish, in own block to avoid iolock
+                globus.task_wait(taskid)
+                if args.rm_at_files:  # delete the AT created files tar, index, etc
+                    logging.info(f"Deleting {path}")
+                    path.unlink()
+                    logging.info(f"Deleting {tar_list}")
+                    tar_list.unlink()
+                    logging.info(f"Deleting {index_p}")
+                    index_p.unlink()
+        except Exception as e:
+            # something bad happened put it on the out_q for return code
+            out_q.put((-1, tar.filename))
+            raise e
+        else:
+            # no issues put on were ok
+            out_q.put((0, tar.filename))
 
 
 def validate_prefix(prefix, path=None):
@@ -446,54 +454,81 @@ def main(argv):
         parser = DwalkParser(path=under_t)
 
         # start parallel pool
-        q = mp.Queue()
+        q = mp.Queue()  # input data
+        out_q = mp.Queue()  # output return code from pool worker
         iolock = mp.Lock()
-        pool = mp.Pool(
-            args.tar_processes, initializer=process, initargs=(q, iolock, args)
-        )
-        for index, index_p, tar_list in parser.tarlist(
-            prefix=args.prefix,
-            minsize=humanfriendly.parse_size(args.tar_size),
-            bundle_path=args.bundle_path,
-        ):
-            logging.info(f"    Index: {index_p}")
-            logging.info(f"    tar: {tar_list}")
+        try:
+            pool = mp.Pool(
+                args.tar_processes,
+                initializer=process,
+                initargs=(q, out_q, iolock, args),
+            )
+            for index, index_p, tar_list in parser.tarlist(
+                prefix=args.prefix,
+                minsize=humanfriendly.parse_size(args.tar_size),
+                bundle_path=args.bundle_path,
+            ):
+                logging.info(f"    Index: {index_p}")
+                logging.info(f"    tar: {tar_list}")
 
-            # actauly tar them up
-            if not args.dryrun:
-                # if compression
-                # if remove
-                if args.bundle_path:
-                    t_args = {
-                        "filename": pathlib.Path(args.bundle_path)
-                        / f"{args.prefix}-{index}.tar"
-                    }
-                else:
-                    t_args = {"filename": f"{args.prefix}-{index}.tar"}
-                if args.remove_files:
-                    t_args["purge"] = True
-                if args.tar_verbose:
-                    t_args["verbose"] = True
+                # actauly tar them up
+                if not args.dryrun:
+                    # if compression
+                    # if remove
+                    if args.bundle_path:
+                        t_args = {
+                            "filename": pathlib.Path(args.bundle_path)
+                            / f"{args.prefix}-{index}.tar"
+                        }
+                    else:
+                        t_args = {"filename": f"{args.prefix}-{index}.tar"}
+                    if args.remove_files:
+                        t_args["purge"] = True
+                    if args.tar_verbose:
+                        t_args["verbose"] = True
 
-                # compression options
-                if args.gzip:
-                    t_args["compress"] = "GZIP"
-                if args.zstd:
-                    t_args["compress"] = "ZSTD"
-                if args.bzip:
-                    t_args["compress"] = "BZ2"
-                if args.lz4:
-                    t_args["compress"] = "LZ4"
-                if args.xz:
-                    t_args["compress"] = "XZ"
+                    # compression options
+                    if args.gzip:
+                        t_args["compress"] = "GZIP"
+                    if args.zstd:
+                        t_args["compress"] = "ZSTD"
+                    if args.bzip:
+                        t_args["compress"] = "BZ2"
+                    if args.lz4:
+                        t_args["compress"] = "LZ4"
+                    if args.xz:
+                        t_args["compress"] = "XZ"
 
-                q.put((t_args, tar_list, index_p))  # put work on the queue
+                    q.put((t_args, tar_list, index_p))  # put work on the queue
 
-        for _ in range(args.tar_processes):  # tell workers we're done
-            q.put(None)
+            for _ in range(args.tar_processes):  # tell workers we're done
+                q.put(None)
 
-        pool.close()
-        pool.join()
+            pool.close()
+            pool.join()
+
+            # check no pool workers had problems running the tar
+            # any task that raised an exception should find a returncode on the out_q
+            suspect_tars = list()
+            for _ in range(index):
+                rc, filename = out_q.get()
+                logging.debug(f"Return code from tar {filename} is {rc}")
+                if rc != 0:
+                    # found an issue with one worker log and push onto list
+                    logging.error(
+                        f"An issue was found running the tars for index {filename}"
+                    )
+                    suspect_tars.append(filename)
+
+            # raise if we found suspect tars
+            raise Exception(
+                f"An issue was found running the tars for {suspect_tars}"
+            ) if suspect_tars else None
+
+        except Exception as e:
+            logging.error("Issue during tar process killing")
+            raise e
+            sys.exit(-1)
 
         # wait for large_taskid to finish
         # large_taskid only esists if --size given to create a large file option
