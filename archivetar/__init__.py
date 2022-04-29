@@ -496,7 +496,9 @@ def main(argv):
         pool.join()
 
         # wait for large_taskid to finish
-        if args.wait:
+        # large_taskid only esists if --size given to create a large file option
+        # this will break once we have 1EB files
+        if args.wait and args.size:
             globus.task_wait(large_taskid)
 
     # bail if --dryrun requested
