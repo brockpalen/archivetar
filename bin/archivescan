@@ -12,6 +12,11 @@
 # Files >100MB   100 Files  100GB
 # Files <100MB 10000 Files  2GB
 #
+# Example, migrate and premigrate are both 100MB.  On a streatch cluster size and thus blocks is 2x if 2 copies etc
+# size  du      blocks (stat)
+# 100M  2048    4096    migrate
+# 100M  204800  409600  premigrate
+#
 # You could combine Locker
 # https://arc-ts.umich.edu/locker/
 # Which frontends Data Den as a cache to hold smaller files
@@ -21,11 +26,19 @@
 # * Generate optional list of files
 # * Make seetings setable from envrionment
 
+import argparse
+import logging
 import math
 import os
 import re
 import time
-from multiprocessing import Pool
+from multiprocessing import Lock, Pool, Queue
+
+# setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+st_handler = logging.StreamHandler()
+logger.addHandler(st_handler)
 
 # This is to get the directory that the program
 # is currently running in.
@@ -42,8 +55,92 @@ lockerrate = float(os.getenv("LOCKERRATE", 54.37))
 # Locker file quota/MB
 lockerinode = int(os.getenv("LOCKERINODE", 1.0e6))
 
+# Replica factor
+# for GPFS / Spectrum Scale streatch systems the blocks on disk will be a multiple of replication.
+replicas = int(os.getenv("REPLICAS", 2.0))
+
+# ratio offline. This often needs to be higher than 1 to account for some sparsenes in files such as zip files.
+# This tool assumes that your mostly managing data on large offline storage systems such as AWS Glacier, HPSS, and Spectrum Archive.
+# Thus the offline ratio if often very large often much greater than 10:1
+offlineratio = int(os.getenv("OFFLINERATIO", 2.0))
+
 byteintbyte = 1024.0 * 1024 * 1024 * 1024
 
+
+parser = argparse.ArgumentParser(
+    description="""
+Standalone tool for number of archive management functions.
+""",
+    epilog="Author Brock Palen brockp@umich.edu",
+)
+
+default_threads = 8
+default_recall = 20
+
+parser.add_argument(
+    "-v",
+    "--verbose",
+    help="Print additional informaiton while running, multiple -v will increase output",
+    action="count",
+    default=0,
+)
+parser.add_argument(
+    "-q",
+    "--quiet",
+    help="Don't print the totals summary at the end",
+    action="store_true",
+)
+parser.add_argument(
+    "-c",
+    "--current-state",
+    help="Show the current state of files in archive rather than future state",
+    action="store_true",
+)
+parser.add_argument(
+    "--print",
+    "--print-cached",
+    help="Print the names of files on cache",
+    action="store_true",
+)
+parser.add_argument(
+    "--print-offline",
+    help="Print the names of files currently offline",
+    action="store_true",
+)
+parser.add_argument(
+    "-p",
+    "--parallel",
+    help=f"Number of parallel workers for scan to start default: {default_threads}",
+    type=int,
+    default=default_threads,
+    metavar="N",
+)
+parser.add_argument(
+    "-r",
+    "--recall",
+    help="Trigger recall of any file that appears offline",
+    action="store_true",
+)
+parser.add_argument(
+    "-w",
+    "--recall-workers",
+    help="Number of recall workers DO NOT use more than 50 default: {default_recall}",
+    type=int,
+    default=default_recall,
+    metavar="N",
+)
+
+ops = parser.parse_args()
+
+if ops.verbose == 1:
+    st_handler.setLevel(logging.INFO)
+elif ops.verbose >= 2:
+    st_handler.setLevel(logging.DEBUG)
+else:
+    st_handler.setLevel(logging.WARNING)
+
+
+recall_queue = Queue()
 
 # get size of all files in a directory path
 # filter_size : files greater than this are counted
@@ -52,7 +149,7 @@ def get_size(start_path=".", filter_size=104857600):
     total_cnt = 0  # counts for archive
     ctotal_size = 0  # size for cache (to small for archive)
     ctotal_cnt = 0  # counts for cache (to small for archive)
-    p = Pool(processes=8)
+    p = Pool(processes=ops.parallel)
     # for dirpath, dirnames, filenames in os.walk(start_path):
     output = p.map(
         get_size_local,
@@ -72,31 +169,87 @@ def get_size(start_path=".", filter_size=104857600):
 
 def get_size_local(args):
     dirpath, filenames, filter_size = args
-    total_size = 0  # total size to archive
+    total_size = 0  # total size to archive / already archived
     total_cnt = 0  # counts for archive
-    ctotal_size = 0  # size for cache (to small for archive)
+    ctotal_size = 0  # size for cache (to small for archive) / on cache
     ctotal_cnt = 0  # counts for cache (to small for archive)
 
     # skip if a locker '.snapshot' directory
     if re.search(r".snapshot", dirpath):
         return total_size, total_cnt, ctotal_size, ctotal_cnt
 
-    start_time = time.time()
     for f in filenames:
         fp = os.path.join(dirpath, f)
         # skip if it is symbolic link
-        if not os.path.islink(fp):
-            size = os.path.getsize(fp)
-            if size > filter_size:
+        if not os.path.islink(fp) and os.path.isfile(fp):
+            st = os.stat(fp)
+            blocks = st.st_blocks
+            size = st.st_size
+            if blocks == 0:  # zero size files
+                ratio = 1.0
+            else:
+                ratio = replicas * (float(size) / (float(blocks) * 512.0))
+
+            logger.debug(
+                f"file: {f} size: {size} blocks: {blocks} archive to cache ratio: {ratio:.2f}"
+            )
+            archived = True
+            if ops.current_state:  # are se seeing what would or what did
+                metric = ratio
+                value = offlineratio
+            else:
+                metric = size
+                value = filter_size
+
+            if metric > value:
                 total_size += size
                 total_cnt += 1
-            if size <= filter_size:
+            if metric <= value:
                 ctotal_size += size
                 ctotal_cnt += 1
 
-    # print("Scan Time %s Seconds" % (time.time() - start_time))
+            if ops.print_offline and ratio > 1.0:  # file is offline
+                print(fp)
+
+            if ops.print and ratio <= 1.0:  # file is online/cached
+                print(fp)
+
+            if ops.recall and ratio > 1.0:
+                logger.debug(f"Adding to recall queue: {fp}")
+                recall_queue.put(fp)
 
     return total_size, total_cnt, ctotal_size, ctotal_cnt
+
+
+def recall_worker(iolock):
+    """Worker that knows how to recall a file from tape."""
+    recall_start = (
+        time.time()
+    )  # start time is global we care total time, not once we added to the archive queue
+    while True:
+        fp = recall_queue.get()
+        if fp is None:
+            break
+
+        logger.debug(f"Attempting to recall: {fp}")
+        with open(fp, "rb") as token:
+            token.seek(-1, 2)  # seek to end of file minus one byte
+            token.read(1)  # read exactly one byte to trigger recall don't save it
+        logger.info(
+            "Recall time for %s is %.2f Seconds" % (fp, time.time() - start_time)
+        )
+
+
+def recall():
+    """Use parallel pool of workers to recall."""
+    iolock = Lock()
+    logger.debug("Starting Recall")
+    p = Pool(ops.recall_workers, initializer=recall_worker, initargs=(iolock,))
+    for _ in range(ops.recall_workers):  # tell workers we are done
+        recall_queue.put(None)
+
+    p.close()
+    p.join()
 
 
 # borrowed from
@@ -118,34 +271,38 @@ def calc_cache(tapesize):
 
 
 ####  Main Program
+if __name__ == "__main__":
 
-# This is to get the directory that the program
-# is currently running in.
-dir_path = os.getcwd()
+    # This is to get the directory that the program
+    # is currently running in.
+    dir_path = os.getcwd()
 
-start_time = time.time()
+    start_time = time.time()
 
+    size, count, csize, ccnt = get_size(filter_size=migratesize * 1024 * 1024)
+    tbyte = math.ceil(size / byteintbyte)
+    extra_cache = calc_cache(tbyte)  # calculate extra cache for tape data in flight
 
-print("----- Results ------")
-print("Data Den Candidates:")
+    if not ops.quiet:
+        print("----- Results ------")
+        print("Data Den Candidates:")
+        print("Files: %s" % (count))
+        print("Size: %s" % (sizeof_fmt(size)))
+        # print("Terabyte %s Cost: $%d" % (tbyte, tbyte*datadenrate))
 
-size, count, csize, ccnt = get_size(filter_size=migratesize * 1024 * 1024)
-tbyte = math.ceil(size / byteintbyte)
-extra_cache = calc_cache(tbyte)  # calculate extra cache for tape data in flight
-print("Files: %s" % (count))
-print("Size: %s" % (sizeof_fmt(size)))
-# print("Terabyte %s Cost: $%d" % (tbyte, tbyte*datadenrate))
+        # get locker sizes
+        tbyte = math.ceil(csize / byteintbyte)
+        filestb = math.ceil((count + ccnt) / lockerinode)
+        tbyte = max(tbyte, filestb)
+        print("")
+        print("Cache (Locker) Candidates:")
+        print("Files: %s" % (ccnt))
+        print("Size: %s" % (sizeof_fmt(csize)))
+        # print("Terabyte %s (Storage: %s, Tape Cache: %s) Cost: $%d" % (tbyte+extra_cache, tbyte, extra_cache, tbyte*lockerrate))
+        print("")
+        print("Total Time %.2f Seconds" % (time.time() - start_time))
 
-# get locker sizes
-tbyte = math.ceil(csize / byteintbyte)
-filestb = math.ceil((count + ccnt) / lockerinode)
-tbyte = max(tbyte, filestb)
-print("")
-print("Cache (Locker) Candidates:")
-print("Files: %s" % (ccnt))
-print("Size: %s" % (sizeof_fmt(csize)))
-# print("Terabyte %s (Storage: %s, Tape Cache: %s) Cost: $%d" % (tbyte+extra_cache, tbyte, extra_cache, tbyte*lockerrate))
-print("")
-print("Scan Time %s Seconds" % (time.time() - start_time))
+        print("Fraction Offline: %.5f %%" % (size / (size + csize) * 100))
 
-print("Fraction Offline: %f %%" % (size / (size + csize) * 100))
+    if ops.recall:
+        recall()
