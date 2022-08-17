@@ -525,9 +525,10 @@ def main(argv):
                     suspect_tars.append(filename)
 
             # raise if we found suspect tars
-            raise Exception(
-                f"An issue was found running the tars for {suspect_tars}"
-            ) if suspect_tars else None
+            if suspect_tars:
+                raise Exception(
+                    f"An issue was found running the tars for {suspect_tars}"
+                )
 
         except Exception as e:
             logging.error("Issue during tar process killing")
