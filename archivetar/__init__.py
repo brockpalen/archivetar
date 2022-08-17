@@ -30,7 +30,7 @@ import humanfriendly
 from environs import Env
 
 from archivetar.archive_args import parse_args
-from archivetar.exceptions import ArchivePrefixConflict
+from archivetar.exceptions import ArchivePrefixConflict, TarError
 from archivetar.unarchivetar import find_archives
 from GlobusTransfer import GlobusTransfer
 from mpiFileUtils import DWalk
@@ -526,7 +526,7 @@ def main(argv):
 
             # raise if we found suspect tars
             if suspect_tars:
-                raise Exception(
+                raise TarError(
                     f"An issue was found running the tars for {suspect_tars}"
                 )
 

@@ -12,3 +12,11 @@ class ArchivePrefixConflict(ArchiveTarException):
     """
 
     pass
+
+
+class TarError(ArchiveTarException):
+    """
+    Error during Tar Process
+    """
+
+    pass
