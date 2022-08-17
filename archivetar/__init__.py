@@ -192,10 +192,12 @@ def build_list(path=False, prefix=False, savecache=False, filters=None):
 
     # configure DWalk
     dwalk = DWalk(
-        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        inst=env.str(
+            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install"
+        ),
         mpirun=env.str(
             "AT_MPIRUN",
-            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.4/bin/mpirun",
+            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
         ),
         sort="name",
         filter=filter,
@@ -238,10 +240,12 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
     # configure DWalk
     under_dwalk = DWalk(
-        inst=env.str("AT_MPIFILEUTILS", default="/home/brockp/mpifileutils/install"),
+        inst=env.str(
+            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install"
+        ),
         mpirun=env.str(
             "AT_MPIRUN",
-            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
         ),
         sort="name",
         progress="10",
@@ -260,11 +264,11 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
     # get the list of files larger than
     over_dwalk = DWalk(
         inst=env.str(
-            "AT_MPIFILEUTILS", default="/sw/arcts/centos7/archivetar/0.10.0/install"
+            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install",
         ),
         mpirun=env.str(
             "AT_MPIRUN",
-            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
         ),
         sort="name",
         progress="10",
@@ -281,11 +285,11 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
     # get the list of files exactly equal to
     at_dwalk = DWalk(
         inst=env.str(
-            "AT_MPIFILEUTILS", default="/sw/arcts/centos7/archivetar/0.10.0/install"
+            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install",
         ),
         mpirun=env.str(
             "AT_MPIRUN",
-            default="/sw/arcts/centos7/stacks/gcc/8.2.0/openmpi/4.0.3/bin/mpirun",
+            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
         ),
         sort="name",
         progress="10",
