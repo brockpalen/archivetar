@@ -1,5 +1,5 @@
 BootStrap: library
-From: ubuntu:20.04
+From: ubuntu:22.04
 
 %post
     apt-get -y update
@@ -12,8 +12,8 @@ From: ubuntu:20.04
     cd archivetar
     bash build.sh
     pip3 install pipenv
-    pipenv install --python 3.8
-    pipenv install --python 3.8 pyinstaller
+    pipenv install --python 3.10
+    pipenv install --python 3.10 pyinstaller
     pipenv run pyinstaller archivetar.spec --onefile
     pipenv run pyinstaller unarchivetar.spec --onefile
     pipenv run pyinstaller archivepurge.spec --onefile
