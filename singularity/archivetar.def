@@ -12,11 +12,11 @@ From: ubuntu:22.04
     cd archivetar
     bash build.sh
     pip3 install pipenv
-    pipenv install --python 3.10
-    pipenv install --python 3.10 pyinstaller
-    pipenv run pyinstaller archivetar.spec --onefile
-    pipenv run pyinstaller unarchivetar.spec --onefile
-    pipenv run pyinstaller archivepurge.spec --onefile
+    pipenv install --dev --python 3.10
+    pipenv run pyinstaller archivetar.spec
+    pipenv run pyinstaller unarchivetar.spec
+    pipenv run pyinstaller archivepurge.spec
+    pipenv run pyinstaller archivescan.spec
     # all installed now the python and dev libraries are not used anymore
     pipenv --rm
     apt-get -y remove cmake git libopenmpi-dev wget gcc g++ libarchive-dev pkg-config libssl-dev libcap-dev python3-pip python3 libbz2-dev

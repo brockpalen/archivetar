@@ -5,7 +5,7 @@ block_cipher = None
 
 
 a = Analysis(
-    ['bin/archivetar'],
+    ['bin/archivescan'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -28,7 +28,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='archivetar',
+    name='archivescan',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
