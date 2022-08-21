@@ -7,6 +7,8 @@ from pathlib import Path
 import globus_sdk
 from humanfriendly import format_size
 
+from .exceptions import GlobusFailedTransfer
+
 logging.getLogger(__name__).addHandler(logging.NullHandler)
 
 
@@ -127,6 +129,10 @@ class GlobusTransfer:
         print(
             f"Status: {status['status']} Task: {status['label']} TX: {format_size(status['bytes_transferred'])} Speed: {format_size(status['effective_bytes_per_second'])}/s TaskID: {task_id}"
         )
+        # if status is FAILED raise an exception
+        if status["status"] == "FAILED":
+            logging.debug(f"Failed Transfer status object: {status}")
+            raise GlobusFailedTransfer(status)
 
     def add_item(self, source_path, label="PY", in_root=False):
         """Add an item to send as part of the current bundle."""

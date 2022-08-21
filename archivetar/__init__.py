@@ -25,6 +25,7 @@ import pathlib
 import re
 import sys
 import tempfile
+from subprocess import CalledProcessError  # nosec
 
 import humanfriendly
 from environs import Env
@@ -33,6 +34,7 @@ from archivetar.archive_args import parse_args
 from archivetar.exceptions import ArchivePrefixConflict, TarError
 from archivetar.unarchivetar import find_archives
 from GlobusTransfer import GlobusTransfer
+from GlobusTransfer.exceptions import GlobusError, GlobusFailedTransfer
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
 
@@ -356,13 +358,22 @@ def process(q, out_q, iolock, args):
                     tar_list.unlink()
                     logging.info(f"Deleting {index_p}")
                     index_p.unlink()
+        except GlobusFailedTransfer as e:
+            logging.error(f"error with globus transfer of: {tar.filename}")
+            out_q.put((-1, tar.filename, e))
+            raise e
+        except CalledProcessError as e:
+            logging.error(f"error with external tar process: {tar.filename}")
+            out_q.put((-1, tar.filename, e))
+            raise e
         except Exception as e:
             # something bad happened put it on the out_q for return code
-            out_q.put((-1, tar.filename))
+            logging.error(f"Unknown error in worker process for: {tar.filename}")
+            out_q.put((-1, tar.filename, e))
             raise e
         else:
             # no issues put on were ok
-            out_q.put((0, tar.filename))
+            out_q.put((0, tar.filename, None))
 
 
 def validate_prefix(prefix, path=None):
@@ -511,11 +522,18 @@ def main(argv):
             pool.close()
             pool.join()
 
+            # wait for large_taskid to finish
+            # large_taskid only esists if --size given to create a large file option
+            # this will break once we have 1EB files
+            if args.wait and args.size:
+                logging.debug("Wait for large_taskid to finish")
+                globus.task_wait(large_taskid)
+
             # check no pool workers had problems running the tar
             # any task that raised an exception should find a returncode on the out_q
             suspect_tars = list()
             for _ in range(index):
-                rc, filename = out_q.get()
+                rc, filename, exception = out_q.get()
                 logging.debug(f"Return code from tar {filename} is {rc}")
                 if rc != 0:
                     # found an issue with one worker log and push onto list
@@ -527,19 +545,13 @@ def main(argv):
             # raise if we found suspect tars
             if suspect_tars:
                 raise TarError(
-                    f"An issue was found running the tars for {suspect_tars}"
+                    f"An issue was found processing the tars for {suspect_tars}"
                 )
 
         except Exception as e:
             logging.error("Issue during tar process killing")
             raise e
             sys.exit(-1)
-
-        # wait for large_taskid to finish
-        # large_taskid only esists if --size given to create a large file option
-        # this will break once we have 1EB files
-        if args.wait and args.size:
-            globus.task_wait(large_taskid)
 
     # bail if --dryrun requested
     if args.dryrun:
