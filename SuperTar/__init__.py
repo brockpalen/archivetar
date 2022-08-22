@@ -111,7 +111,7 @@ def what_comp(filename):
 
 
 class SuperTar:
-    """ tar wrapper class for high speed """
+    """tar wrapper class for high speed"""
 
     # requires gnu tar
     def __init__(
@@ -120,6 +120,7 @@ class SuperTar:
         compress=False,  # compress or not False | GZIP | BZ2 | LZ4
         verbose=False,  # print extra information when arching
         purge=False,  # pass --remove-files
+        ignore_failed_read=False,  # pass --ignore-failed-read when creating files, does nothing on extract
     ):
 
         if not filename:  # filename needed  eg tar --file <filename>
@@ -128,6 +129,7 @@ class SuperTar:
         self.filename = filename
         self._purge = purge
         self._compress = compress
+        self._ignore_failed_read = ignore_failed_read
 
         # set inital tar options,
         self._flags = ["tar"]
@@ -179,6 +181,10 @@ class SuperTar:
             self._flags.append("--remove-files")
         if self.compsuffix:
             self.filename = f"{self.filename}{self.compsuffix}"
+
+        # are we ignoring files that are deleted before we run?
+        if self._ignore_failed_read:
+            self._flags.append("--ignore-failed-read")
 
         self._flags += ["--file", self.filename]
         logging.debug(f"Tar invoked with: {self._flags}")

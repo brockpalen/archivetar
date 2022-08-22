@@ -266,7 +266,8 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
     # get the list of files larger than
     over_dwalk = DWalk(
         inst=env.str(
-            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install",
+            "AT_MPIFILEUTILS",
+            default="/sw/pkgs/arc/archivetar/0.14.0/install",
         ),
         mpirun=env.str(
             "AT_MPIRUN",
@@ -287,7 +288,8 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
     # get the list of files exactly equal to
     at_dwalk = DWalk(
         inst=env.str(
-            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install",
+            "AT_MPIFILEUTILS",
+            default="/sw/pkgs/arc/archivetar/0.14.0/install",
         ),
         mpirun=env.str(
             "AT_MPIRUN",
@@ -501,6 +503,8 @@ def main(argv):
                         t_args["purge"] = True
                     if args.tar_verbose:
                         t_args["verbose"] = True
+                    if args.ignore_failed_read:
+                        t_args["ignore_failed_read"] = True
 
                     # compression options
                     if args.gzip:

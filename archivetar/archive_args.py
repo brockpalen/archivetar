@@ -187,6 +187,11 @@ def parse_args(args):
         help="Pass --remove-files to tar, Delete files as/when added to archive (CAREFUL). --save-purge-list is safer but requires more storage space.",
         action="store_true",
     )
+    tar_opts.add_argument(
+        "--ignore-failed-read",
+        help="Pass --ignore-failed-read to tar, Do not exit with nonzero on unreadable files or directories. .",
+        action="store_true",
+    )
 
     compression = parser.add_mutually_exclusive_group()
     compression.add_argument(
