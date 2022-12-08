@@ -27,6 +27,7 @@
 # * Make seetings setable from envrionment
 
 import argparse
+import fnmatch
 import logging
 import math
 import os
@@ -77,6 +78,13 @@ Standalone tool for number of archive management functions.
 default_threads = 8
 default_recall = 20
 
+parser.add_argument(
+    "-f",
+    "--filter",
+    help="Include only matching files in statistics and recalls (Python fnmatch syntax).",
+    type=str,
+    default="*",
+)
 parser.add_argument(
     "-v",
     "--verbose",
@@ -180,6 +188,9 @@ def get_size_local(args):
 
     for f in filenames:
         fp = os.path.join(dirpath, f)
+        if not fnmatch.fnmatch(fp, ops.filter):
+            continue
+
         # skip if it is symbolic link
         if not os.path.islink(fp) and os.path.isfile(fp):
             st = os.stat(fp)
