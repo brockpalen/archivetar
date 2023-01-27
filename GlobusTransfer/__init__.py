@@ -5,6 +5,7 @@ import stat
 from pathlib import Path
 
 import globus_sdk
+from globus_sdk.scopes import GCSCollectionScopeBuilder, TransferScopes
 from humanfriendly import format_size
 
 from .exceptions import GlobusFailedTransfer
@@ -31,24 +32,7 @@ class GlobusTransfer:
         self.TransferData = None  # start empty created as needed
         self.transfers = []
 
-        authorizer = self.get_authorizer()
-
-        self.tc = globus_sdk.TransferClient(authorizer=authorizer)
-
-        #  attempt to auto activate each endpoint so to not stop later in the flow
-        self.endpoint_autoactivate(self.ep_source)
-        self.endpoint_autoactivate(self.ep_dest)
-
-    def get_authorizer(self):
         """Create an authorizer to use with Globus Service Clients."""
-        client, tokens = self.get_tokens()
-        # most specifically, you want these tokens as strings
-        refresh_token = tokens["refresh_token"]
-
-        authorizer = globus_sdk.RefreshTokenAuthorizer(refresh_token, client)
-        return authorizer
-
-    def get_tokens(self):
         """
         Get globus tokens data.
 
@@ -58,43 +42,89 @@ class GlobusTransfer:
         Try to load tokens
         Else start authorization
         """
-        client = globus_sdk.NativeAppAuthClient(self._CLIENT_ID)
-        client.oauth2_start_flow(refresh_tokens=True)
+
+        self.client = globus_sdk.NativeAppAuthClient(self._CLIENT_ID)
+        self.required_scopes = []  # list of scopes for GCS5 collections
 
         save_path = Path.home() / ".globus"
         token_file = save_path / "tokens.json"
 
-        if save_path.is_dir():  # exists and directory
-            st = os.stat(save_path)
-            logging.debug(f"{str(save_path)} exists permissions {st.st_mode}")
-            if bool(st.st_mode & stat.S_IRWXO):
-                raise Exception("~/.globus is world readable and to permissive set 700")
-            if bool(st.st_mode & stat.S_IRWXG):
-                raise Exception("~/.globus is group readable and to permissive set 700")
-        else:  # create ~/.globus
-            logging.debug(f"Creating {str(save_path)}")
-            save_path.mkdir(mode=0o700)
+        # if save_path.is_dir():  # exists and directory
+        #     st = os.stat(save_path)
+        #     logging.debug(f"{str(save_path)} exists permissions {st.st_mode}")
+        #     if bool(st.st_mode & stat.S_IRWXO):
+        #         raise Exception("~/.globus is world readable and to permissive set 700")
+        #     if bool(st.st_mode & stat.S_IRWXG):
+        #         raise Exception("~/.globus is group readable and to permissive set 700")
+        # else:  # create ~/.globus
+        #     logging.debug(f"Creating {str(save_path)}")
+        #     save_path.mkdir(mode=0o700)
 
-        try:  # try and read tokens from file else create and save
-            with token_file.open() as f:
-                return client, json.load(f)
-        except FileNotFoundError:
-            tokens = self.do_native_app_authentication(client)
-            tokens = tokens["transfer.api.globus.org"]
-            with token_file.open("w") as f:
-                logging.debug("Saving tokens to {str(token_file)}")
-                json.dump(tokens, f)
-                return client, tokens
+        # try:  # try and read tokens from file else create and save
+        #     with token_file.open() as f:
+        #         tokens = json.load(f)
+        # except FileNotFoundError:
+        #     tokens = self.do_native_app_authentication(client)
+        #     tokens = tokens.by_resource_server["transfer.api.globus.org"]
+        #     with token_file.open("w") as f:
+        #         logging.debug("Saving tokens to {str(token_file)}")
+        #         json.dump(tokens, f)
 
-    def do_native_app_authentication(self, client):
+        # # most specifically, you want these tokens as strings
+        # refresh_token = tokens["refresh_token"]
+
+        # print(tokens["access_token"])
+
+        # authorizer = globus_sdk.RefreshTokenAuthorizer(refresh_token, client)
+
+        # self.tc = globus_sdk.TransferClient(authorizer=authorizer)
+        self.tc = self.do_native_app_authentication()
+
+        # check our concent situation for GCS5 systems
+        self.check_for_concent_required(self.ep_source, os.getcwd())
+        self.check_for_concent_required(self.ep_dest, self.path_dest)
+
+        #  attempt to auto activate each endpoint so to not stop later in the flow
+        self.endpoint_autoactivate(self.ep_source)
+        self.endpoint_autoactivate(self.ep_dest)
+
+        if self.required_scopes:
+            # we need to auth again asking for these scopes
+            print(
+                "\n"
+                "One of your endpoints requires consent in order to be used.\n"
+                "You must login a second time to grant consents.\n\n"
+            )
+            self.tc = self.do_native_app_authentication(scopes=self.required_scopes)
+
+    def do_native_app_authentication(self, scopes=TransferScopes.all):
         """Does Native App Authentication Flow and returns tokens."""
-        authorize_url = client.oauth2_get_authorize_url()
-        print("Please go to this URL and login: \n{0}".format(authorize_url))
+        self.client.oauth2_start_flow(refresh_tokens=True, requested_scopes=scopes)
+        authorize_url = self.client.oauth2_get_authorize_url()
+        print("\nPlease go to this URL and login: \n{0}".format(authorize_url))
 
-        auth_code = input("Please enter the code you get after login here: ").strip()
-        token_response = client.oauth2_exchange_code_for_tokens(auth_code)
+        auth_code = input("\nPlease enter the code you get after login here: ").strip()
+        tokens = self.client.oauth2_exchange_code_for_tokens(auth_code)
+        transfer_tokens = tokens.by_resource_server["transfer.api.globus.org"]
 
-        return token_response.by_resource_server
+        # return token_response.by_resource_server
+        return globus_sdk.TransferClient(
+            authorizer=globus_sdk.AccessTokenAuthorizer(transfer_tokens["access_token"])
+        )
+
+    def check_for_concent_required(self, target, path):
+        """
+        To make sure our tokens have access before doing anything try to ls each.
+
+        target : UUID of collection / endpoint
+        path : path to list
+        """
+
+        try:
+            self.tc.operation_ls(target, path)
+        except globus_sdk.TransferAPIError as err:
+            if err.info.consent_required:
+                self.required_scopes.extend(err.info.consent_required.required_scopes)
 
     def endpoint_autoactivate(self, endpoint, if_expires_in=3600):
         """Use TransferClient.endpoint_autoactivate() to make sure the endpoint is question is active."""
