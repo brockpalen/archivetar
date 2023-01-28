@@ -46,7 +46,7 @@ def test_DwalkParser_doesntexist(kwargs):
     ],
 )
 def test_DwalkParser_tarlist(parser, tmp_path, kwargs, result, expex):
-    """test DwalkParser.tarlist() """
+    """test DwalkParser.tarlist()"""
     os.chdir(tmp_path)
     print(tmp_path)
     for count, index, tarlist in parser.tarlist(**kwargs):

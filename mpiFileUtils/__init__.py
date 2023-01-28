@@ -51,7 +51,7 @@ class mpiFileUtils:
 class DRm(mpiFileUtils):
     """
     Wrapper for drm.
-    
+
     progress int  seconds to print progress
     exe      str  alternative executable name
     dryrun   bool Don't run just print
@@ -134,7 +134,7 @@ class DWalk(mpiFileUtils):
         self.apply()
 
     def _setoutput(self, textout=False, cacheout=False):
-        """ stay DRY """
+        """stay DRY"""
         if textout:
             self.args += ["--text-output", f"{textout}"]
             self.textout = textout
