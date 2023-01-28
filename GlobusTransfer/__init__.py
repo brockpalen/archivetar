@@ -47,38 +47,33 @@ class GlobusTransfer:
         self.required_scopes = []  # list of scopes for GCS5 collections
 
         save_path = Path.home() / ".globus"
-        token_file = save_path / "tokens.json"
+        self.token_file = save_path / "tokens.json"
 
-        # if save_path.is_dir():  # exists and directory
-        #     st = os.stat(save_path)
-        #     logging.debug(f"{str(save_path)} exists permissions {st.st_mode}")
-        #     if bool(st.st_mode & stat.S_IRWXO):
-        #         raise Exception("~/.globus is world readable and to permissive set 700")
-        #     if bool(st.st_mode & stat.S_IRWXG):
-        #         raise Exception("~/.globus is group readable and to permissive set 700")
-        # else:  # create ~/.globus
-        #     logging.debug(f"Creating {str(save_path)}")
-        #     save_path.mkdir(mode=0o700)
+        if save_path.is_dir():  # exists and directory
+            st = os.stat(save_path)
+            logging.debug(f"{str(save_path)} exists permissions {st.st_mode}")
+            if bool(st.st_mode & stat.S_IRWXO):
+                raise Exception("~/.globus is world readable and to permissive set 700")
+            if bool(st.st_mode & stat.S_IRWXG):
+                raise Exception("~/.globus is group readable and to permissive set 700")
+        else:  # create ~/.globus
+            logging.debug(f"Creating {str(save_path)}")
+            save_path.mkdir(mode=0o700)
 
-        # try:  # try and read tokens from file else create and save
-        #     with token_file.open() as f:
-        #         tokens = json.load(f)
-        # except FileNotFoundError:
-        #     tokens = self.do_native_app_authentication(client)
-        #     tokens = tokens.by_resource_server["transfer.api.globus.org"]
-        #     with token_file.open("w") as f:
-        #         logging.debug("Saving tokens to {str(token_file)}")
-        #         json.dump(tokens, f)
+        try:  # try and read tokens from file else create and save
+            with self.token_file.open() as f:
+                tokens = json.load(f)
 
-        # # most specifically, you want these tokens as strings
-        # refresh_token = tokens["refresh_token"]
-
-        # print(tokens["access_token"])
-
-        # authorizer = globus_sdk.RefreshTokenAuthorizer(refresh_token, client)
-
-        # self.tc = globus_sdk.TransferClient(authorizer=authorizer)
-        self.tc = self.do_native_app_authentication()
+            authorizer = globus_sdk.RefreshTokenAuthorizer(
+                tokens["refresh_token"],
+                self.client,
+                access_token=tokens["access_token"],
+                expires_at=tokens["expires_at_seconds"],
+                on_refresh=self._save_tokens,
+            )
+            self.tc = globus_sdk.TransferClient(authorizer=authorizer)
+        except FileNotFoundError:
+            self.tc = self.do_native_app_authentication()
 
         # check our concent situation for GCS5 systems
         self.check_for_concent_required(self.ep_source, os.getcwd())
@@ -97,20 +92,38 @@ class GlobusTransfer:
             )
             self.tc = self.do_native_app_authentication(scopes=self.required_scopes)
 
+    def _save_tokens(self, tokens):
+        """Save Globus auth tokens as required.
+
+        Expects OAuthTokenResponse
+        https://globus-sdk-python.readthedocs.io/en/stable/authorization.html#globus_sdk.RefreshTokenAuthorizer
+        """
+
+        # we only want transfer tokens
+        tokens = tokens.by_resource_server["transfer.api.globus.org"]
+        with self.token_file.open("w") as f:
+            logging.debug("Saving tokens to {str(token_file)}")
+            json.dump(tokens, f)
+
     def do_native_app_authentication(self, scopes=TransferScopes.all):
-        """Does Native App Authentication Flow and returns tokens."""
+        """
+        Does Native App Authentication Flow and returns a transfer client."""
         self.client.oauth2_start_flow(refresh_tokens=True, requested_scopes=scopes)
         authorize_url = self.client.oauth2_get_authorize_url()
         print("\nPlease go to this URL and login: \n{0}".format(authorize_url))
 
         auth_code = input("\nPlease enter the code you get after login here: ").strip()
         tokens = self.client.oauth2_exchange_code_for_tokens(auth_code)
-        transfer_tokens = tokens.by_resource_server["transfer.api.globus.org"]
-
-        # return token_response.by_resource_server
-        return globus_sdk.TransferClient(
-            authorizer=globus_sdk.AccessTokenAuthorizer(transfer_tokens["access_token"])
+        self._save_tokens(tokens)
+        tokens = tokens.by_resource_server["transfer.api.globus.org"]
+        authorizer = globus_sdk.RefreshTokenAuthorizer(
+            tokens["refresh_token"],
+            self.client,
+            access_token=tokens["access_token"],
+            expires_at=tokens["expires_at_seconds"],
+            on_refresh=self._save_tokens,
         )
+        return globus_sdk.TransferClient(authorizer=authorizer)
 
     def check_for_concent_required(self, target, path):
         """
