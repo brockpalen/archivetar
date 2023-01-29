@@ -432,132 +432,135 @@ def main(argv):
         cache = build_list(**b_args)
         logging.debug(f"Results of full path scan saved at {cache}")
 
-    # filter for files under size
-    if (not args.dryrun) or (args.dryrun == 2):
-
-        # Set --size filter to 1ExaByte if not set
-        filtersize = args.size if args.size else "1EB"
-        logging.info(
-            f"----> [Phase 1.5] Filter out files greater than {filtersize} if --size given"
-        )
-
-        # IN: List of files
-        # OUT: pathlib: undersize_text, undersize_cache, oversize_text, atsize_text
-        under_t, under_c, over_t = filter_list(
-            path=cache,
-            size=humanfriendly.parse_size(filtersize),
-            prefix=cache.stem,
-            purgelist=args.save_purge_list,
-        )
-
-        # if globus get transfer the large files
-        if args.destination_dir and not args.dryrun:
-            # transfer = upload_overlist(over_t, globus)
-            over_p = DwalkParser(path=over_t)
-            for path in over_p.getpath():
-                path = path.rstrip(b"\n")  # strip trailing newline
-                path = path.decode("utf-8")  # convert byte array to string
-                path = pathlib.Path(path)
-                logging.debug(f"Adding file {path} to Globus Transfer")
-                globus.add_item(path, label=f"Large File List {args.prefix}")
-
-            large_taskid = globus.submit_pending_transfer()
-            logging.info(f"Globus Transfer of Oversize files: {large_taskid}")
-
-        # Dwalk list parser
-        logging.info(
-            f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
-        )
-        parser = DwalkParser(path=under_t)
-
-        # start parallel pool
-        q = mp.Queue()  # input data
-        out_q = mp.Queue()  # output return code from pool worker
-        iolock = mp.Lock()
-        try:
-            pool = mp.Pool(
-                args.tar_processes,
-                initializer=process,
-                initargs=(q, out_q, iolock, args),
-            )
-            for index, index_p, tar_list in parser.tarlist(
-                prefix=args.prefix,
-                minsize=humanfriendly.parse_size(args.tar_size),
-                bundle_path=args.bundle_path,
-            ):
-                logging.info(f"    Index: {index_p}")
-                logging.info(f"    tar: {tar_list}")
-
-                # actauly tar them up
-                if not args.dryrun:
-                    # if compression
-                    # if remove
-                    if args.bundle_path:
-                        t_args = {
-                            "filename": pathlib.Path(args.bundle_path)
-                            / f"{args.prefix}-{index}.tar"
-                        }
-                    else:
-                        t_args = {"filename": f"{args.prefix}-{index}.tar"}
-                    if args.remove_files:
-                        t_args["purge"] = True
-                    if args.tar_verbose:
-                        t_args["verbose"] = True
-                    if args.ignore_failed_read:
-                        t_args["ignore_failed_read"] = True
-
-                    # compression options
-                    if args.gzip:
-                        t_args["compress"] = "GZIP"
-                    if args.zstd:
-                        t_args["compress"] = "ZSTD"
-                    if args.bzip:
-                        t_args["compress"] = "BZ2"
-                    if args.lz4:
-                        t_args["compress"] = "LZ4"
-                    if args.xz:
-                        t_args["compress"] = "XZ"
-
-                    q.put((t_args, tar_list, index_p))  # put work on the queue
-
-            for _ in range(args.tar_processes):  # tell workers we're done
-                q.put(None)
-
-            pool.close()
-            pool.join()
-
-            # wait for large_taskid to finish
-            # large_taskid only esists if --size given to create a large file option
-            # this will break once we have 1EB files
-            if args.wait and args.size:
-                logging.debug("Wait for large_taskid to finish")
-                globus.task_wait(large_taskid)
-
-            # check no pool workers had problems running the tar
-            # any task that raised an exception should find a returncode on the out_q
-            suspect_tars = list()
-            for _ in range(index):
-                rc, filename, exception = out_q.get()
-                logging.debug(f"Return code from tar {filename} is {rc}")
-                if rc != 0:
-                    # found an issue with one worker log and push onto list
-                    logging.error(
-                        f"An issue was found running the tars for index {filename}"
-                    )
-                    suspect_tars.append(filename)
-
-            # raise if we found suspect tars
-            if suspect_tars:
-                raise TarError(
-                    f"An issue was found processing the tars for {suspect_tars}"
-                )
-
-        except Exception as e:
-            logging.error("Issue during tar process killing")
-            raise e
-            sys.exit(-1)
-
     # bail if --dryrun requested
-    if args.dryrun:
+    if args.dryrun == 1:
         logging.info("--dryrun requested exiting")
         sys.exit(0)
+
+    # filter for files under size
+    # Set --size filter to 1ExaByte if not set
+    filtersize = args.size if args.size else "1EB"
+    logging.info(
+        f"----> [Phase 1.5] Filter out files greater than {filtersize} if --size given"
+    )
+
+    # IN: List of files
+    # OUT: pathlib: undersize_text, undersize_cache, oversize_text, atsize_text
+    under_t, under_c, over_t = filter_list(
+        path=cache,
+        size=humanfriendly.parse_size(filtersize),
+        prefix=cache.stem,
+        purgelist=args.save_purge_list,
+    )
+
+    # if globus get transfer the large files
+    if args.destination_dir and not args.dryrun:
+        # transfer = upload_overlist(over_t, globus)
+        over_p = DwalkParser(path=over_t)
+        for path in over_p.getpath():
+            path = path.rstrip(b"\n")  # strip trailing newline
+            path = path.decode("utf-8")  # convert byte array to string
+            path = pathlib.Path(path)
+            logging.debug(f"Adding file {path} to Globus Transfer")
+            globus.add_item(path, label=f"Large File List {args.prefix}")
+
+        large_taskid = globus.submit_pending_transfer()
+        logging.info(f"Globus Transfer of Oversize files: {large_taskid}")
+
+    # Dwalk list parser
+    logging.info(
+        f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
+    )
+    parser = DwalkParser(path=under_t)
+
+    # start parallel pool
+    q = mp.Queue()  # input data
+    out_q = mp.Queue()  # output return code from pool worker
+    iolock = mp.Lock()
+    try:
+        for index, index_p, tar_list in parser.tarlist(
+            prefix=args.prefix,
+            minsize=humanfriendly.parse_size(args.tar_size),
+            bundle_path=args.bundle_path,
+        ):
+            logging.info(f"    Index: {index_p}")
+            logging.info(f"    tar: {tar_list}")
+
+            # actauly tar them up
+            if not args.dryrun:
+                # if compression
+                # if remove
+                if args.bundle_path:
+                    t_args = {
+                        "filename": pathlib.Path(args.bundle_path)
+                        / f"{args.prefix}-{index}.tar"
+                    }
+                else:
+                    t_args = {"filename": f"{args.prefix}-{index}.tar"}
+                if args.remove_files:
+                    t_args["purge"] = True
+                if args.tar_verbose:
+                    t_args["verbose"] = True
+                if args.ignore_failed_read:
+                    t_args["ignore_failed_read"] = True
+
+                # compression options
+                if args.gzip:
+                    t_args["compress"] = "GZIP"
+                if args.zstd:
+                    t_args["compress"] = "ZSTD"
+                if args.bzip:
+                    t_args["compress"] = "BZ2"
+                if args.lz4:
+                    t_args["compress"] = "LZ4"
+                if args.xz:
+                    t_args["compress"] = "XZ"
+
+                q.put((t_args, tar_list, index_p))  # put work on the queue
+
+        # bail if --dryrun requested
+        if args.dryrun:
+            logging.info("--dryrun --dryrun requested exiting")
+            sys.exit(0)
+
+        # start parallel pool of workers
+        pool = mp.Pool(
+            args.tar_processes,
+            initializer=process,
+            initargs=(q, out_q, iolock, args),
+        )
+
+        for _ in range(args.tar_processes):  # tell workers we're done
+            q.put(None)
+
+        pool.close()
+        pool.join()
+
+        # wait for large_taskid to finish
+        # large_taskid only esists if --size given to create a large file option
+        # this will break once we have 1EB files
+        if args.wait and args.size:
+            logging.debug("Wait for large_taskid to finish")
+            globus.task_wait(large_taskid)
+
+        # check no pool workers had problems running the tar
+        # any task that raised an exception should find a returncode on the out_q
+        suspect_tars = list()
+        for _ in range(index):
+            rc, filename, exception = out_q.get()
+            logging.debug(f"Return code from tar {filename} is {rc}")
+            if rc != 0:
+                # found an issue with one worker log and push onto list
+                logging.error(
+                    f"An issue was found running the tars for index {filename}"
+                )
+                suspect_tars.append(filename)
+
+        # raise if we found suspect tars
+        if suspect_tars:
+            raise TarError(f"An issue was found processing the tars for {suspect_tars}")
+
+    except Exception as e:
+        logging.error("Issue during tar process killing")
+        raise e
+        sys.exit(-1)
