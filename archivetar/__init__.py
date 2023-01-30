@@ -503,6 +503,8 @@ def main(argv):
                     t_args["verbose"] = True
                 if args.ignore_failed_read:
                     t_args["ignore_failed_read"] = True
+                if args.dereference:
+                    t_args["dereference"] = True
 
                 # compression options
                 if args.gzip:

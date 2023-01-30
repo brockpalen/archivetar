@@ -190,7 +190,12 @@ def parse_args(args):
     )
     tar_opts.add_argument(
         "--ignore-failed-read",
-        help="Pass --ignore-failed-read to tar, Do not exit with nonzero on unreadable files or directories. .",
+        help="Pass --ignore-failed-read to tar, Do not exit with nonzero on unreadable files or directories.",
+        action="store_true",
+    )
+    tar_opts.add_argument(
+        "--dereference",
+        help="Pass --dereference to tar, Follow symlinks; archive and dump the files they point to.",
         action="store_true",
     )
 

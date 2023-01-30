@@ -121,6 +121,7 @@ class SuperTar:
         verbose=False,  # print extra information when arching
         purge=False,  # pass --remove-files
         ignore_failed_read=False,  # pass --ignore-failed-read when creating files, does nothing on extract
+        dereference=False,  # pass --dereference when creating files, does nothing on extract
     ):
 
         if not filename:  # filename needed  eg tar --file <filename>
@@ -130,6 +131,7 @@ class SuperTar:
         self._purge = purge
         self._compress = compress
         self._ignore_failed_read = ignore_failed_read
+        self._dereference = dereference
 
         # set inital tar options,
         self._flags = ["tar"]
@@ -185,6 +187,10 @@ class SuperTar:
         # are we ignoring files that are deleted before we run?
         if self._ignore_failed_read:
             self._flags.append("--ignore-failed-read")
+
+        # grab what symlinks point to and not the links themselves
+        if self._dereference:
+            self._flags.append("--dereference")
 
         self._flags += ["--file", self.filename]
         logging.debug(f"Tar invoked with: {self._flags}")
