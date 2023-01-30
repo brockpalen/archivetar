@@ -78,7 +78,7 @@ def parse_args(args):
     return args
 
 
-def find_archives(prefix, path=None):
+def find_prefix_files(prefix, path=None, suffix="tar"):
     """
     Find all tar's in current directory matching pattern.
 
@@ -91,9 +91,9 @@ def find_archives(prefix, path=None):
     else:
         p = pathlib.Path(".")
 
-    tars = natsorted(p.glob(f"{prefix}-[0-9]*.tar*"), key=str)
+    tars = natsorted(p.glob(f"{prefix}-[0-9]*.{suffix}*"), key=str)
 
-    logging.debug(f"Found archives: {tars}")
+    logging.debug(f"Found files prefix: {prefix} Suffix: {suffix} : {tars}")
 
     return tars
 
@@ -133,7 +133,7 @@ def main(argv):
         logging.basicConfig(level=logging.INFO)
 
     # find all archives for prefix
-    archives = find_archives(args.prefix)
+    archives = find_prefix_files(args.prefix)
     logging.info(f"Found {len(archives)} archives with prefix {args.prefix}")
 
     # start parallel pool

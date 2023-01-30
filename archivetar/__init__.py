@@ -32,7 +32,7 @@ from environs import Env
 
 from archivetar.archive_args import parse_args
 from archivetar.exceptions import ArchivePrefixConflict, TarError
-from archivetar.unarchivetar import find_archives
+from archivetar.unarchivetar import find_prefix_files
 from GlobusTransfer import GlobusTransfer
 from GlobusTransfer.exceptions import GlobusError, GlobusFailedTransfer
 from mpiFileUtils import DWalk
@@ -389,11 +389,21 @@ def process(q, out_q, iolock, args):
 def validate_prefix(prefix, path=None):
     """Check that the prefix selected won't conflict with current files"""
 
-    # use find_archives from unarchivetar to use the same match
-    tars = find_archives(prefix, path)
+    # use find_prefix_files from unarchivetar to use the same match
+    tars = find_prefix_files(prefix, path)
+    tars.extend(find_prefix_files(prefix, path, suffix="index.txt"))
+    tars.extend(find_prefix_files(prefix, path, suffix="DONT_DELETE.txt"))
 
     if len(tars) != 0:
         logging.critical(f"Prefix {prefix} conflicts with current files {tars}")
+        print("\n")
+        print(
+            "Conflicting filex for selected prefix stopping to avoid unexpected behavior"
+        )
+        for item in tars:
+            print(f"\t{item}")
+
+        print("\n")
         raise ArchivePrefixConflict(
             f"Prefix {prefix} conflicts with current files {tars}"
         )
