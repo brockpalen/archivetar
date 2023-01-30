@@ -111,6 +111,7 @@ def parse_args(args):
         action="store_true",
     )
     parser.add_argument(
+        "--bundle-dir",
         "--bundle-path",
         help="Alternative path to bundle tars and indexes.  Useful if directory being archived is at or over quota and cannot write tars to current location.  Defaults to CWD.",
         default=None,
@@ -228,7 +229,11 @@ def parse_args(args):
         help=f"Destination endpoint/collection Default: {dest_default}",
         default=dest_default,
     )
-    globus.add_argument("--destination-dir", help="Directory on Destination server")
+    globus.add_argument(
+        "--destination-dir",
+        "--destination-path",
+        help="Directory on Destination server",
+    )
     globus.add_argument(
         "--globus-verbose", help="Globus Verbose Logging", action="store_true"
     )

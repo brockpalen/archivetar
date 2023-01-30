@@ -410,7 +410,7 @@ def main(argv):
         urllib_logger.setLevel(logging.WARNING)
 
     # check that selected prefix is usable
-    validate_prefix(args.prefix, path=args.bundle_path)
+    validate_prefix(args.prefix, path=args.bundle_dir)
 
     # if using globus, init to prompt for endpoiont activation etc
     if args.destination_dir:
@@ -481,7 +481,7 @@ def main(argv):
         for index, index_p, tar_list in parser.tarlist(
             prefix=args.prefix,
             minsize=humanfriendly.parse_size(args.tar_size),
-            bundle_path=args.bundle_path,
+            bundle_path=args.bundle_dir,
         ):
             logging.info(f"    Index: {index_p}")
             logging.info(f"    tar: {tar_list}")
@@ -490,9 +490,9 @@ def main(argv):
             if not args.dryrun:
                 # if compression
                 # if remove
-                if args.bundle_path:
+                if args.bundle_dir:
                     t_args = {
-                        "filename": pathlib.Path(args.bundle_path)
+                        "filename": pathlib.Path(args.bundle_dir)
                         / f"{args.prefix}-{index}.tar"
                     }
                 else:
