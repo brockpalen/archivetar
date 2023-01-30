@@ -240,9 +240,6 @@ def parse_args(args):
         help="Directory on Destination server",
     )
     globus.add_argument(
-        "--globus-verbose", help="Globus Verbose Logging", action="store_true"
-    )
-    globus.add_argument(
         "--wait",
         help="Wait for  all Globus Transfers to finish before moving to next tar process / existing archivetar",
         action="store_true",
@@ -251,6 +248,34 @@ def parse_args(args):
         "--rm-at-files",
         help="Remove archivetar created files (tar, index, tar-list) after globus transfer of tars",
         action="store_true",
+    )
+    globus.add_argument(
+        "--no-notify-on-succeeded",
+        help="Do not send notification email when the transfer completes with a status of SUCCEEDED",
+        action="store_false",
+    )
+    globus.add_argument(
+        "--no-notify-on-failed",
+        help="Do not send notification email when the transfer completes with a status of FAILED",
+        action="store_false",
+    )
+    globus.add_argument(
+        "--no-notify-on-inactive",
+        help="Do not send notification email when the transfer changes status to INACTIVE. e.g. From credentials expiring.",
+        action="store_false",
+    )
+    globus.add_argument(
+        "--fail-on-quota-errors",
+        help="When true, quota exceeded errors will cause the task to fail.",
+        action="store_true",
+    )
+    globus.add_argument(
+        "--skip-source-errors",
+        help="When true, source permission denied and file not found errors from the source endpoint will cause the offending path to be skipped.",
+        action="store_true",
+    )
+    globus.add_argument(
+        "--globus-verbose", help="Globus Verbose Logging", action="store_true"
     )
 
     args = parser.parse_args(args)

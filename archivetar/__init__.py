@@ -333,7 +333,15 @@ def process(q, out_q, iolock, args):
                 )
                 if args.destination_dir:  # if globus destination is set upload
                     globus = GlobusTransfer(
-                        args.source, args.destination, args.destination_dir
+                        args.source,
+                        args.destination,
+                        args.destination_dir,
+                        # note notify are the reverse of the SDK
+                        notify_on_succeeded=args.no_notify_on_succeeded,
+                        notify_on_failed=args.no_notify_on_failed,
+                        notify_on_inactive=args.no_notify_on_inactive,
+                        fail_on_quota_errors=args.fail_on_quota_errors,
+                        skip_source_errors=args.skip_source_errors,
                     )
                     path = pathlib.Path(tar.filename).resolve()
                     logging.debug(f"Adding file {path} to Globus Transfer")
@@ -414,7 +422,17 @@ def main(argv):
 
     # if using globus, init to prompt for endpoiont activation etc
     if args.destination_dir:
-        globus = GlobusTransfer(args.source, args.destination, args.destination_dir)
+        globus = GlobusTransfer(
+            args.source,
+            args.destination,
+            args.destination_dir,
+            # note notify are the reverse of the SDK
+            notify_on_succeeded=args.no_notify_on_succeeded,
+            notify_on_failed=args.no_notify_on_failed,
+            notify_on_inactive=args.no_notify_on_inactive,
+            fail_on_quota_errors=args.fail_on_quota_errors,
+            skip_source_errors=args.skip_source_errors,
+        )
 
     # do we have a user provided list?
     if args.list:

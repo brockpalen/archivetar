@@ -18,17 +18,36 @@ class GlobusTransfer:
     object of where / how to transfer data
     """
 
-    def __init__(self, ep_source, ep_dest, path_dest):
+    def __init__(
+        self,
+        ep_source,
+        ep_dest,
+        path_dest,
+        notify_on_succeeded=True,
+        notify_on_failed=True,
+        notify_on_inactive=True,
+        fail_on_quota_errors=False,
+        skip_source_errors=False,
+    ):
         """
         ep_source  Globus Collection/Endpoint Source Name
         ep_dest    Globus Collection/Endpoint Destination Name
         path_dest   Path on destination endpoint
+
+        Other options see: https://globus-sdk-python.readthedocs.io/en/stable/services/transfer.html#globus_sdk.TransferData
         """
 
         self._CLIENT_ID = "8359fb34-39cf-410d-bd93-e8502aa68c46"
         self.ep_source = ep_source
         self.ep_dest = ep_dest
         self.path_dest = path_dest
+        self.notify_on_succeeded = notify_on_succeeded
+        self.notify_on_failed = notify_on_failed
+        self.notify_on_inactive = notify_on_inactive
+        # CANT USE multiple jobs will cause other files to be wiped out
+        # self.delete_destination_extra = delete_destination_extra
+        self.fail_on_quota_errors = fail_on_quota_errors
+        self.skip_source_errors = skip_source_errors
         self.TransferData = None  # start empty created as needed
         self.transfers = []
 
@@ -191,6 +210,11 @@ class GlobusTransfer:
                 self.ep_dest,
                 verify_checksum=True,
                 label=f"archivetar {label}",
+                notify_on_succeeded=self.notify_on_succeeded,
+                notify_on_failed=self.notify_on_failed,
+                notify_on_inactive=self.notify_on_inactive,
+                fail_on_quota_errors=self.fail_on_quota_errors,
+                skip_source_errors=self.skip_source_errors,
             )
 
         # add item
