@@ -94,7 +94,7 @@ def parse_args(args):
     parser.add_argument(
         "-t",
         "--tar-size",
-        help=f"Target tar size before options (eg. 10G 1T) Default: {tar_size}",
+        help=f"Target tar size before options (eg. 10G 1T). Can be set with AT_TAR_SIZE environment variable. Default: {tar_size}",
         type=str,
         default=tar_size,
     )
@@ -219,14 +219,14 @@ def parse_args(args):
     source_default = env.str("AT_SOURCE", default="umich#greatlakes")
     globus.add_argument(
         "--source",
-        help=f"Source endpoint/collection Default: {source_default}",
+        help=f"Source endpoint/collection. Can be set with AT_SOURCE environment variable. Default: {source_default}",
         default=source_default,
     )
 
     dest_default = env.str("AT_DESTINATION", default="umich#flux")
     globus.add_argument(
         "--destination",
-        help=f"Destination endpoint/collection Default: {dest_default}",
+        help=f"Destination endpoint/collection. Can be set with AT_DESTINATION environment variable. Default: {dest_default}",
         default=dest_default,
     )
     globus.add_argument(
