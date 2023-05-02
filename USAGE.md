@@ -134,8 +134,25 @@ for them to finish.  This is ok in most cases but not ones where you want to
 know the transfer is complete before modifying / deleting data or scripting
 multiple archives. 
 
-The `--wait` option tells archivetar to wait for all globus transfer to finish.
-It will also print print globus performance information as it runs. 
+The `--wait` option tells archivetar to wait for all Globus transfer to finish.
+It will also print print Globus performance information as it runs. 
 
 The option `--rm-at-files`  implies `--wait` for tars _only_ and not transfers
 created by the `--size` option.
+
+
+Environment Variables
+---------------------
+
+Several `archivetar` settings can be controlled by environment variables (handy
+for overriding defaults or for site-specific customization, e.g. inside Lmod
+modules).  Currently supported environment variables:
+
+| Variable         | Equivalent CLI option                | Meaning                                          |
+|------------------|--------------------------------------|--------------------------------------------------|
+| `AT_TAR_SIZE`    | `-t TAR_SIZE`, `--tar-size TAR_SIZE` | Target tar size before options (eg. `10G`, `1T`) |
+| `AT_SOURCE`      | `--source SOURCE`                    | Source Globus endpoint/collection                |
+| `AT_DESTINATION` | `--destination DESTINATION`          | Destination Globus endpoint/collection           |
+
+The `AT_SOURCE` and `AT_DESTINATION` are especially useful to point at your
+institutional storage systems.
