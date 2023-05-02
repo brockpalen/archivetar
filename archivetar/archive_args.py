@@ -36,7 +36,7 @@ def stat_check(string):
     matched = re.match(r"^[+,-]?\d+$", string)
     if bool(matched):
         return string
-    raise ValueError("Intagers only, optionally prefixed with + or -")
+    raise ValueError("Integers only, optionally prefixed with + or -")
 
 
 def unix_check(string):
@@ -49,7 +49,7 @@ def unix_check(string):
     matched = re.match(r"^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$", string)
     if bool(matched):
         return string
-    raise ValueError("Intagers only, optionally prefixed with + or -")
+    raise ValueError("Integers only, optionally prefixed with + or -")
 
 
 def file_check(string):
@@ -71,14 +71,14 @@ def parse_args(args):
     )
     parser.add_argument(
         "--dryrun",
-        help="Print what would do but dont do it, aditional --dryrun increases how far the script runs\n 1 = Walk Filesystem and stop, 2 = Filter and create sublists",
+        help="Print what would do but don't do it, aditional --dryrun increases how far the script runs\n 1 = Walk Filesystem and stop, 2 = Filter and create sublists",
         action="count",
         default=0,
     )
     parser.add_argument(
         "-p",
         "--prefix",
-        help="prefix for tar eg prefix-1.tar prefix-2.tar etc",
+        help="prefix for tar, e.g. prefix-1.tar prefix-2.tar etc",
         type=str,
         required=True,
     )
@@ -142,7 +142,7 @@ def parse_args(args):
 
     filter_ops = parser.add_argument_group(
         title="Filtering Options",
-        description="Options to limit files included in the archive similar to options for unix find.  NOTICE: These should be used with care.  Improper mixing of filter and the --size option could result in unintended behavior if used without globus.",
+        description="Options to limit files included in the archive similar to options for unix find.  NOTICE: These should be used with care.  Improper mixing of filter and the --size option could result in unintended behavior if used without Globus.",
     )
     filter_ops.add_argument(
         "--atime",
@@ -190,7 +190,7 @@ def parse_args(args):
     )
     tar_opts.add_argument(
         "--ignore-failed-read",
-        help="Pass --ignore-failed-read to tar, Do not exit with nonzero on unreadable files or directories. .",
+        help="Pass --ignore-failed-read to tar, Do not exit with nonzero on unreadable files or directories.",
         action="store_true",
     )
 
@@ -244,7 +244,7 @@ def parse_args(args):
     )
     globus.add_argument(
         "--rm-at-files",
-        help="Remove archivetar created files (tar, index, tar-list) after globus transfer of tars",
+        help="Remove archivetar created files (tar, index, tar-list) after Globus transfer of tars",
         action="store_true",
     )
 
