@@ -12,7 +12,7 @@ Workflow
 Singularity
 -----------
 
-See `singularity` this is likely recomended for workstation and single user installs.
+See [singularity](singularity) this is likely recomended for workstation and single user installs.
 
 Building archivetar
 -------------------
@@ -38,7 +38,7 @@ Archivetar does use setuptools so it can be installed by `pip` to add to your gl
 
 ### Configuration
 
-Archivetar uses environment for configuration
+Archivetar uses environment variables for configuration
 
 ```
 # Required
@@ -50,6 +50,12 @@ AT_SOURCE=<Globus UUID Default Collection>
 AT_DESTINATION=<Globus UUID Default Collection>
 AT_TAR_SIZE=<Default --tar-size>
 ```
+
+Singularity containers already have required variables defined inside the
+container (e.g. see `singularity exec archivetar_master.sif env | grep ^AT_`),
+so you would only need to [re]define the optional ones to suite your site's
+needs.
+
 
 #### Dev options
 
