@@ -569,7 +569,7 @@ def main(argv):
         # wait for large_taskid to finish
         # large_taskid only esists if --size given to create a large file option
         # this will break once we have 1EB files
-        if args.wait and args.size:
+        if args.wait and large_taskid:
             logging.debug("Wait for large_taskid to finish")
             globus.task_wait(large_taskid)
 
