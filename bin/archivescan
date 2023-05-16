@@ -56,6 +56,10 @@ lockerrate = float(os.getenv("LOCKERRATE", 54.37))
 # Locker file quota/MB
 lockerinode = int(os.getenv("LOCKERINODE", 1.0e6))
 
+# minimum size of a file to consider offline based on block size.
+# for GPFS this normally means 2
+minblocks = float(os.getenv("MINBLOCKS", 2.0))
+
 # Replica factor
 # for GPFS / Spectrum Scale streatch systems the blocks on disk will be a multiple of replication.
 replicas = int(os.getenv("REPLICAS", 2.0))
@@ -198,13 +202,19 @@ def get_size_local(args):
             size = st.st_size
             if blocks == 0:  # zero size files
                 ratio = 1.0
+            elif blocks <= minblocks:
+                # files smaller than blocksize * 2 on GPFS will show up as offline
+                ratio = replicas * (float(size) / (float(blocks) * 512.0))
+                logger.info(
+                    f"file: {f} size: {size} blocks: {blocks} is less than minblocks: {minblocks} thus assumed online ratio before adjustmint: {ratio}"
+                )
+                ratio = 1.0
             else:
                 ratio = replicas * (float(size) / (float(blocks) * 512.0))
 
             logger.debug(
                 f"file: {f} size: {size} blocks: {blocks} archive to cache ratio: {ratio:.2f}"
             )
-            archived = True
             if ops.current_state:  # are se seeing what would or what did
                 metric = ratio
                 value = offlineratio
@@ -219,7 +229,8 @@ def get_size_local(args):
                 ctotal_size += size
                 ctotal_cnt += 1
 
-            if ops.print_offline and ratio > 1.0:  # file is offline
+            if ops.print_offline and ratio > 1.0:
+                # file is offline
                 print(fp)
 
             if ops.print and ratio <= 1.0:  # file is online/cached
@@ -234,9 +245,6 @@ def get_size_local(args):
 
 def recall_worker(iolock):
     """Worker that knows how to recall a file from tape."""
-    recall_start = (
-        time.time()
-    )  # start time is global we care total time, not once we added to the archive queue
     while True:
         fp = recall_queue.get()
         if fp is None:
