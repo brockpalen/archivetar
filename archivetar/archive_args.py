@@ -36,7 +36,7 @@ def stat_check(string):
     matched = re.match(r"^[+,-]?\d+$", string)
     if bool(matched):
         return string
-    raise ValueError("Intagers only, optionally prefixed with + or -")
+    raise ValueError("Integers only, optionally prefixed with + or -")
 
 
 def unix_check(string):
@@ -49,7 +49,7 @@ def unix_check(string):
     matched = re.match(r"^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$", string)
     if bool(matched):
         return string
-    raise ValueError("Intagers only, optionally prefixed with + or -")
+    raise ValueError("Integers only, optionally prefixed with + or -")
 
 
 def file_check(string):
@@ -71,14 +71,14 @@ def parse_args(args):
     )
     parser.add_argument(
         "--dryrun",
-        help="Print what would do but dont do it, aditional --dryrun increases how far the script runs\n 1 = Walk Filesystem and stop, 2 = Filter and create sublists",
+        help="Print what would do but don't do it, aditional --dryrun increases how far the script runs\n 1 = Walk Filesystem and stop, 2 = Filter and create sublists",
         action="count",
         default=0,
     )
     parser.add_argument(
         "-p",
         "--prefix",
-        help="prefix for tar eg prefix-1.tar prefix-2.tar etc",
+        help="prefix for tar, e.g. prefix-1.tar prefix-2.tar etc",
         type=str,
         required=True,
     )
@@ -94,7 +94,7 @@ def parse_args(args):
     parser.add_argument(
         "-t",
         "--tar-size",
-        help=f"Target tar size before options (eg. 10G 1T) Default: {tar_size}",
+        help=f"Target tar size before options (eg. 10G 1T). Can be set with AT_TAR_SIZE environment variable. Default: {tar_size}",
         type=str,
         default=tar_size,
     )
@@ -142,7 +142,7 @@ def parse_args(args):
 
     filter_ops = parser.add_argument_group(
         title="Filtering Options",
-        description="Options to limit files included in the archive similar to options for unix find.  NOTICE: These should be used with care.  Improper mixing of filter and the --size option could result in unintended behavior if used without globus.",
+        description="Options to limit files included in the archive similar to options for unix find.  NOTICE: These should be used with care.  Improper mixing of filter and the --size option could result in unintended behavior if used without Globus.",
     )
     filter_ops.add_argument(
         "--atime",
@@ -224,14 +224,14 @@ def parse_args(args):
     source_default = env.str("AT_SOURCE", default="umich#greatlakes")
     globus.add_argument(
         "--source",
-        help=f"Source endpoint/collection Default: {source_default}",
+        help=f"Source endpoint/collection. Can be set with AT_SOURCE environment variable. Default: {source_default}",
         default=source_default,
     )
 
     dest_default = env.str("AT_DESTINATION", default="umich#flux")
     globus.add_argument(
         "--destination",
-        help=f"Destination endpoint/collection Default: {dest_default}",
+        help=f"Destination endpoint/collection. Can be set with AT_DESTINATION environment variable. Default: {dest_default}",
         default=dest_default,
     )
     globus.add_argument(
@@ -246,7 +246,7 @@ def parse_args(args):
     )
     globus.add_argument(
         "--rm-at-files",
-        help="Remove archivetar created files (tar, index, tar-list) after globus transfer of tars",
+        help="Remove archivetar created files (tar, index, tar-list) after Globus transfer of tars",
         action="store_true",
     )
     globus.add_argument(
