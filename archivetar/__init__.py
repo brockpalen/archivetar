@@ -57,7 +57,7 @@ class DwalkLine:
         else:
             self.relativeto = os.getcwd()
 
-        self.size = self._normilizeunits(
+        self.size = self._normalizeunits(
             units=match[2], count=float(match[1])
         )  # size in bytes
         if stripcwd:
@@ -65,23 +65,16 @@ class DwalkLine:
         else:
             self.path = match[3]
 
-    def _normilizeunits(self, units=False, count=False):
+    def _normalizeunits(self, units=False, count=False):
         """convert size by SI units to Bytes"""
         units = units.decode()  # convert binary data to string type
-        if units == "B":
-            return count
-        elif units == "KB":
-            return 1000 * count
-        elif units == "MB":
-            return 1000 * 1000 * count
-        elif units == "GB":
-            return 1000 * 1000 * 1000 * count
-        elif units == "TB":
-            return 1000 * 1000 * 1000 * 1000 * count
-        elif units == "PB":
-            return 1000 * 1000 * 1000 * 1000 * count
-        else:
+        # SI powers, e.g., 1 KB = 10**3 bytes
+        SI_powers = dict(B=0,KB=3,MB=6,GB=9,TB=12,PB=15)
+        try:
+            num_bytes = count * 10**SI_powers[units]
+        except KeyError as ex:
             raise Exception(f"{units} is not a known SI unit")
+        return num_bytes
 
     def _stripcwd(self, path):
         """dwalk print absolute paths, we need relative"""
