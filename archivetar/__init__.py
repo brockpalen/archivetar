@@ -45,6 +45,12 @@ env = Env()
 # env.read_env()  # read .env file, if it exists
 
 
+# defaults used for development
+# overridden with AT_MPIRUN and AT_MPIFILEUTILS
+fileutils = "/sw/pkgs/arc/archivetar/0.14.0/install"
+mpirun = "/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun"
+
+
 class DwalkLine:
     def __init__(self, line=False, relativeto=False, stripcwd=True):
         """parse dwalk output line"""
@@ -194,13 +200,8 @@ def build_list(path=False, prefix=False, savecache=False, filters=None):
 
     # configure DWalk
     dwalk = DWalk(
-        inst=env.str(
-            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install"
-        ),
-        mpirun=env.str(
-            "AT_MPIRUN",
-            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
-        ),
+        inst=env.str("AT_MPIFILEUTILS", default=fileutils),
+        mpirun=env.str("AT_MPIRUN", default=mpirun),
         sort="name",
         filter=filter,
         progress="10",
@@ -242,13 +243,8 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
     # configure DWalk
     under_dwalk = DWalk(
-        inst=env.str(
-            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install"
-        ),
-        mpirun=env.str(
-            "AT_MPIRUN",
-            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
-        ),
+        inst=env.str("AT_MPIFILEUTILS", default=fileutils),
+        mpirun=env.str("AT_MPIRUN", default=mpirun),
         sort="name",
         progress="10",
         filter=["--type", "f", "--size", f"-{size}"],
@@ -263,16 +259,31 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
     # start the actual scan
     under_dwalk.scancache(cachein=path, textout=u_textout, cacheout=u_cacheout)
 
+    # get the list of all symlinks
+    symlink_dwalk = DWalk(
+        inst=env.str("AT_MPIFILEUTILS", default=fileutils),
+        mpirun=env.str("AT_MPIRUN", default=mpirun),
+        sort="name",
+        progress="10",
+        filter=["--type", "l"],  # don't set size so even --size 0B works
+        umask=0o077,  # set premissions to only the user invoking
+    )
+
+    symlink_path = pathlib.Path(tempfile.gettempdir())
+    symlink_textout = symlink_path / f"{prefix}.symlink.txt"
+
+    # start the actual scan
+    symlink_dwalk.scancache(cachein=path, textout=symlink_textout)
+
+    # append symlink_textout to u_textout to add to tars
+    with u_textout.open("a+") as u:
+        with symlink_textout.open() as links:
+            u.write(links.read())
+
     # get the list of files larger than
     over_dwalk = DWalk(
-        inst=env.str(
-            "AT_MPIFILEUTILS",
-            default="/sw/pkgs/arc/archivetar/0.14.0/install",
-        ),
-        mpirun=env.str(
-            "AT_MPIRUN",
-            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
-        ),
+        inst=env.str("AT_MPIFILEUTILS", default=fileutils),
+        mpirun=env.str("AT_MPIRUN", default=mpirun),
         sort="name",
         progress="10",
         filter=["--type", "f", "--size", f"+{size}"],
@@ -287,14 +298,8 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
 
     # get the list of files exactly equal to
     at_dwalk = DWalk(
-        inst=env.str(
-            "AT_MPIFILEUTILS",
-            default="/sw/pkgs/arc/archivetar/0.14.0/install",
-        ),
-        mpirun=env.str(
-            "AT_MPIRUN",
-            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
-        ),
+        inst=env.str("AT_MPIFILEUTILS", default=fileutils),
+        mpirun=env.str("AT_MPIRUN", default=mpirun),
         sort="name",
         progress="10",
         filter=["--type", "f", "--size", f"{size}"],
