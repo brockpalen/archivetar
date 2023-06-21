@@ -131,7 +131,7 @@ def test_DwalkLine_parse(monkeypatch, line, result, size):
         ),  # case maters
     ],
 )
-def test_DwalkLine_normilizeunits(test_DwalkLine, kwargs, result, expex):
+def test_DwalkLine_normalizeunits(test_DwalkLine, kwargs, result, expex):
     with expex:
-        count = test_DwalkLine._normilizeunits(**kwargs)
+        count = test_DwalkLine._normalizeunits(**kwargs)
         assert count == result
