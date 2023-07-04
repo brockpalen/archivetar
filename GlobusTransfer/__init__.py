@@ -48,7 +48,7 @@ class GlobusTransfer:
         # self.delete_destination_extra = delete_destination_extra
         self.fail_on_quota_errors = fail_on_quota_errors
         self.skip_source_errors = skip_source_errors
-        self.session_required_single_domain = []  # used with HA collections
+        self.session_required_single_domain = None  # used with HA collections
         self.TransferData = None  # start empty created as needed
         self.transfers = []
 
@@ -112,6 +112,15 @@ class GlobusTransfer:
             )
             self.tc = self.do_native_app_authentication(scopes=self.required_scopes)
 
+        if self.session_required_single_domain:
+            # we need to auth again asking for these scopes
+            print(
+                "\n"
+                "One of your endpoints requires consent in order to be used.\n"
+                "You must login a second time to grant consents.\n\n"
+            )
+            self.tc = self.do_native_app_authentication()
+
     def _save_tokens(self, tokens):
         """Save Globus auth tokens as required.
 
@@ -135,7 +144,7 @@ class GlobusTransfer:
             self.session_required_single_domain
         ):  # check if an HA collection that requires single domain
             query_params = {
-                "session_required_single_domain": self.session_required_single_domain
+                "session_required_single_domain": self.session_required_single_domain[0]
             }
 
         self.client.oauth2_start_flow(refresh_tokens=True, requested_scopes=scopes)
@@ -164,14 +173,17 @@ class GlobusTransfer:
         """
 
         try:
-            self.tc.operation_ls(target, path)
+            for entry in self.tc.operation_ls(target, path):
+                print(entry["name"] + ("/" if entry["type"] == "dir" else ""))
         except globus_sdk.TransferAPIError as err:
+            print(err)
+            print(err.info.authorization_parameters.session_required_single_domain)
             if err.info.consent_required:
                 self.required_scopes.extend(err.info.consent_required.required_scopes)
             if err.info.authorization_parameters:
-                self.session_required_single_domain.extend(
-                    err.info.authorization_parameters.session_required_single_domain
-                )
+                self.session_required_single_domain = err.info.authorization_parameters.session_required_single_domain
+            else:
+                raise(err.info)
 
     def endpoint_autoactivate(self, endpoint, if_expires_in=3600):
         """Use TransferClient.endpoint_autoactivate() to make sure the endpoint is question is active."""
