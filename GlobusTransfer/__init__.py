@@ -48,6 +48,7 @@ class GlobusTransfer:
         # self.delete_destination_extra = delete_destination_extra
         self.fail_on_quota_errors = fail_on_quota_errors
         self.skip_source_errors = skip_source_errors
+        self.session_required_single_domain = []  # used with HA collections
         self.TransferData = None  # start empty created as needed
         self.transfers = []
 
@@ -126,9 +127,19 @@ class GlobusTransfer:
 
     def do_native_app_authentication(self, scopes=TransferScopes.all):
         """
-        Does Native App Authentication Flow and returns a transfer client."""
+        Does Native App Authentication Flow and returns a transfer client.
+        """
+
+        query_params = None
+        if (
+            self.session_required_single_domain
+        ):  # check if an HA collection that requires single domain
+            query_params = {
+                "session_required_single_domain": self.session_required_single_domain
+            }
+
         self.client.oauth2_start_flow(refresh_tokens=True, requested_scopes=scopes)
-        authorize_url = self.client.oauth2_get_authorize_url()
+        authorize_url = self.client.oauth2_get_authorize_url(query_params=query_params)
         print("\nPlease go to this URL and login: \n{0}".format(authorize_url))
 
         auth_code = input("\nPlease enter the code you get after login here: ").strip()
@@ -157,6 +168,10 @@ class GlobusTransfer:
         except globus_sdk.TransferAPIError as err:
             if err.info.consent_required:
                 self.required_scopes.extend(err.info.consent_required.required_scopes)
+            if err.info.authorization_parameters:
+                self.session_required_single_domain.extend(
+                    err.info.authorization_parameters.session_required_single_domain
+                )
 
     def endpoint_autoactivate(self, endpoint, if_expires_in=3600):
         """Use TransferClient.endpoint_autoactivate() to make sure the endpoint is question is active."""

@@ -75,9 +75,9 @@ class DwalkLine:
         """convert size by SI units to Bytes"""
         units = units.decode()  # convert binary data to string type
         # SI powers, e.g., 1 KB = 10**3 bytes
-        SI_powers = dict(B=0,KB=3,MB=6,GB=9,TB=12,PB=15)
+        SI_powers = dict(B=0, KB=3, MB=6, GB=9, TB=12, PB=15)
         try:
-            num_bytes = count * 10**SI_powers[units]
+            num_bytes = count * 10 ** SI_powers[units]
         except KeyError as ex:
             raise Exception(f"{units} is not a known SI unit")
         return num_bytes
