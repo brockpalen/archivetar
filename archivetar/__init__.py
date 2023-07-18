@@ -75,9 +75,9 @@ class DwalkLine:
         """convert size by SI units to Bytes"""
         units = units.decode()  # convert binary data to string type
         # SI powers, e.g., 1 KB = 10**3 bytes
-        SI_powers = dict(B=0,KB=3,MB=6,GB=9,TB=12,PB=15)
+        SI_powers = dict(B=0, KB=3, MB=6, GB=9, TB=12, PB=15)
         try:
-            num_bytes = count * 10**SI_powers[units]
+            num_bytes = count * 10 ** SI_powers[units]
         except KeyError as ex:
             raise Exception(f"{units} is not a known SI unit")
         return num_bytes
@@ -340,6 +340,7 @@ def process(q, out_q, iolock, args):
                         notify_on_inactive=args.no_notify_on_inactive,
                         fail_on_quota_errors=args.fail_on_quota_errors,
                         skip_source_errors=args.skip_source_errors,
+                        preserve_timestamp=args.preserve_timestamp,
                     )
                     path = pathlib.Path(tar.filename).resolve()
                     logging.debug(f"Adding file {path} to Globus Transfer")
@@ -440,6 +441,7 @@ def main(argv):
             notify_on_inactive=args.no_notify_on_inactive,
             fail_on_quota_errors=args.fail_on_quota_errors,
             skip_source_errors=args.skip_source_errors,
+            preserve_timestamp=args.preserve_timestamp,
         )
 
     # do we have a user provided list?
