@@ -340,6 +340,7 @@ def process(q, out_q, iolock, args):
                         notify_on_inactive=args.no_notify_on_inactive,
                         fail_on_quota_errors=args.fail_on_quota_errors,
                         skip_source_errors=args.skip_source_errors,
+                        preserve_timestamp=args.preserve_timestamp,
                     )
                     path = pathlib.Path(tar.filename).resolve()
                     logging.debug(f"Adding file {path} to Globus Transfer")
@@ -440,6 +441,7 @@ def main(argv):
             notify_on_inactive=args.no_notify_on_inactive,
             fail_on_quota_errors=args.fail_on_quota_errors,
             skip_source_errors=args.skip_source_errors,
+            preserve_timestamp=args.preserve_timestamp,
         )
 
     # do we have a user provided list?

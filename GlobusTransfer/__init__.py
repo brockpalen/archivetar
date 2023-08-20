@@ -28,6 +28,7 @@ class GlobusTransfer:
         notify_on_inactive=True,
         fail_on_quota_errors=False,
         skip_source_errors=False,
+        preserve_timestamp=False,
     ):
         """
         ep_source  Globus Collection/Endpoint Source Name
@@ -48,6 +49,7 @@ class GlobusTransfer:
         # self.delete_destination_extra = delete_destination_extra
         self.fail_on_quota_errors = fail_on_quota_errors
         self.skip_source_errors = skip_source_errors
+        self.preserve_timestamp = preserve_timestamp
         self.session_required_single_domain = None  # used with HA collections
         self.TransferData = None  # start empty created as needed
         self.transfers = []
@@ -252,6 +254,7 @@ class GlobusTransfer:
                 notify_on_inactive=self.notify_on_inactive,
                 fail_on_quota_errors=self.fail_on_quota_errors,
                 skip_source_errors=self.skip_source_errors,
+                preserve_timestamp=self.preserve_timestamp,
             )
 
         # add item

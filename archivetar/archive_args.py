@@ -250,6 +250,11 @@ def parse_args(args):
         action="store_true",
     )
     globus.add_argument(
+        "--preserve-timestamp",
+        help="Globus Transfer will attempt to set file timestamps on the destination to match those on the origin.",
+        action="store_true",
+    )
+    globus.add_argument(
         "--no-notify-on-succeeded",
         help="Do not send notification email when the transfer completes with a status of SUCCEEDED",
         action="store_false",
