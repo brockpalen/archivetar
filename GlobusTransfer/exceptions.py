@@ -17,3 +17,9 @@ class GlobusFailedTransfer(GlobusError):
         else:
             self.message = f"Task: {status['label']} with id: {status['task_id']}"
             super().__init__(self.message)
+
+
+class ScopeOrSingleDomainError(GlobusError):
+    """Auth found missing scope or single_domain requirement"""
+
+    pass

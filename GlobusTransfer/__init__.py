@@ -8,7 +8,7 @@ import globus_sdk
 from globus_sdk.scopes import GCSCollectionScopeBuilder, TransferScopes
 from humanfriendly import format_size
 
-from .exceptions import GlobusFailedTransfer
+from .exceptions import GlobusFailedTransfer, ScopeOrSingleDomainError
 
 logging.getLogger(__name__).addHandler(logging.NullHandler)
 
@@ -95,31 +95,40 @@ class GlobusTransfer:
         except FileNotFoundError:
             self.tc = self.do_native_app_authentication()
 
-        # check our concent situation for GCS5 systems
-        self.check_for_concent_required(self.ep_source, os.getcwd())
-        self.check_for_concent_required(self.ep_dest, self.path_dest)
+        # keep checking until no exceptions
+        clean = False
+        while clean is False:
+            try:
+                # check our concent situation for GCS5 systems
+                self.check_for_concent_required(self.ep_source, os.getcwd())
+                self.check_for_concent_required(self.ep_dest, self.path_dest)
+            except ScopeOrSingleDomainError as e:
+                print(e)
+                if self.required_scopes:
+                    # we need to auth again asking for these scopes
+                    print(
+                        "\n"
+                        "One of your endpoints requires consent in order to be used.\n"
+                        "You must login a second time to grant consents.\n\n"
+                    )
+                    self.tc = self.do_native_app_authentication(
+                        scopes=self.required_scopes
+                    )
+
+                if self.session_required_single_domain:
+                    # we need to auth again asking for these scopes
+                    print(
+                        "\n"
+                        "One of your endpoints requires domain constraints in order to be used.\n"
+                        "You must login a second time to grant consents.\n\n"
+                    )
+                    self.tc = self.do_native_app_authentication()
+            else:
+                clean = True
 
         #  attempt to auto activate each endpoint so to not stop later in the flow
         self.endpoint_autoactivate(self.ep_source)
         self.endpoint_autoactivate(self.ep_dest)
-
-        if self.required_scopes:
-            # we need to auth again asking for these scopes
-            print(
-                "\n"
-                "One of your endpoints requires consent in order to be used.\n"
-                "You must login a second time to grant consents.\n\n"
-            )
-            self.tc = self.do_native_app_authentication(scopes=self.required_scopes)
-
-        if self.session_required_single_domain:
-            # we need to auth again asking for these scopes
-            print(
-                "\n"
-                "One of your endpoints requires consent in order to be used.\n"
-                "You must login a second time to grant consents.\n\n"
-            )
-            self.tc = self.do_native_app_authentication()
 
     def _save_tokens(self, tokens):
         """Save Globus auth tokens as required.
@@ -173,17 +182,18 @@ class GlobusTransfer:
         """
 
         try:
-            for entry in self.tc.operation_ls(target, path):
-                print(entry["name"] + ("/" if entry["type"] == "dir" else ""))
+            self.tc.operation_ls(target, path)
         except globus_sdk.TransferAPIError as err:
             print(err)
             print(err.info.authorization_parameters.session_required_single_domain)
             if err.info.consent_required:
                 self.required_scopes.extend(err.info.consent_required.required_scopes)
+                raise ScopeOrSingleDomainError("adding missing consent")
             if err.info.authorization_parameters:
-                self.session_required_single_domain = err.info.authorization_parameters.session_required_single_domain
-            else:
-                raise(err.info)
+                self.session_required_single_domain = (
+                    err.info.authorization_parameters.session_required_single_domain
+                )
+                raise ScopeOrSingleDomainError("adding missing domain")
 
     def endpoint_autoactivate(self, endpoint, if_expires_in=3600):
         """Use TransferClient.endpoint_autoactivate() to make sure the endpoint is question is active."""
