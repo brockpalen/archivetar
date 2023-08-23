@@ -150,16 +150,10 @@ class GlobusTransfer:
         Does Native App Authentication Flow and returns a transfer client.
         """
 
-        query_params = None
-        if (
-            self.session_required_single_domain
-        ):  # check if an HA collection that requires single domain
-            query_params = {
-                "session_required_single_domain": self.session_required_single_domain[0]
-            }
-
         self.client.oauth2_start_flow(refresh_tokens=True, requested_scopes=scopes)
-        authorize_url = self.client.oauth2_get_authorize_url(query_params=query_params)
+        authorize_url = self.client.oauth2_get_authorize_url(
+            session_required_single_domain=self.session_required_single_domain
+        )
         print("\nPlease go to this URL and login: \n{0}".format(authorize_url))
 
         auth_code = input("\nPlease enter the code you get after login here: ").strip()
@@ -181,6 +175,12 @@ class GlobusTransfer:
 
         target : UUID of collection / endpoint
         path : path to list
+
+        If there is any transfer errors it liekly is because of not having required concent on GCS5 hoosts
+        or domain constraints when using HA collections.  These are populated and looped through until
+        no additional errors exist.
+
+        This could cause issues if there are other unknown errors because the ones we care about are all the same exception.
         """
 
         try:
