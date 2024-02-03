@@ -126,6 +126,23 @@ archivetar --prefix brockp-archive --list brockp-archive-<timestamp>.cache
 archivepurge --purge-list brockp-archive-<timestamp>.cache
 ```
 
+Recovering Specific Folders (partial restores)
+----------------------------------------------
+
+Restoring sub folders is a multi-step process.
+
+1. Pull back the `DONT_DELTE.txt` files
+1. (optionally) pull back the folder with big files if archived with `--size
+   <size>`
+1. Find the needed tars with: `unarchivetar --prefix my-prefix --which-archive
+   --folder "exactfolder/subfolder"`
+1. Recall the required tars returned by the prior command
+1. Expand: `unarchivetar --prefix my-prefix --folder "exactfolder/subfolder"`
+
+Folder names must be exact and not have a trailing `/`. You can optionally use
+`grep` and look around the `index` and `DONT_DELETE` files yourself if unsure of
+the exact name.
+
 Managing Globus Transfers
 ------------------------
 
