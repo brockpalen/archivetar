@@ -131,7 +131,7 @@ Recovering Specific Folders (partial restores)
 
 Restoring sub folders is a multi-step process.
 
-1. Pull back the `DONT_DELTE.txt` files
+1. Pull back the `DONT_DELETE.txt` files
 1. (optionally) pull back the folder with big files if archived with `--size
    <size>`
 1. Find the needed tars with: `unarchivetar --prefix my-prefix --which-archive
