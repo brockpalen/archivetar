@@ -8,6 +8,7 @@ import argparse
 import logging
 import multiprocessing as mp
 import pathlib
+import sys
 
 from natsort import natsorted
 
@@ -43,6 +44,12 @@ def parse_args(args):
         help="Extract/Search only the given folder similar to tar -xf a.tar folder/sub",
         type=str,
         default=None,
+    )
+    parser.add_argument(
+        "-w",
+        "--which-archive",
+        help="Using DONT_DELETE files when used with --folder <folder> report which archives will be needed for a given prefix",
+        action="store_true",
     )
 
     verbosity = parser.add_mutually_exclusive_group()
@@ -138,6 +145,32 @@ def main(argv):
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    # alternative path when trying to find a folder in an archive, we need to know which archives to get
+    if args.which_archive:
+        if not args.folder:
+            print("Selecting archives without --folder which is required")
+            sys.exit(1)
+        file_lists = find_prefix_files(args.prefix, suffix="DONT_DELETE")
+        logging.info(f"Found {len(file_lists)} file lists with prefix {args.prefix}")
+
+        matches = set()
+        for file_list in file_lists:
+            with open(file_list, "r") as file:
+                for line_no, line in enumerate(file, start=1):
+                    # add a / to make a folder
+                    if line.startswith(args.folder + "/"):
+                        logging.debug(
+                            f"{file_list} : Match found at line {line_no}: {line}"
+                        )
+                        matches.add(str(file_list))
+
+        print("\nRecall archives for the following:\n")
+        for match in matches:
+            print(match)
+
+        # don't continue on
+        sys.exit(0)
 
     # find all archives for prefix
     archives = find_prefix_files(args.prefix)
