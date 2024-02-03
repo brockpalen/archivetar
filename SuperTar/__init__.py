@@ -122,6 +122,7 @@ class SuperTar:
         purge=False,  # pass --remove-files
         ignore_failed_read=False,  # pass --ignore-failed-read when creating files, does nothing on extract
         dereference=False,  # pass --dereference when creating files, does nothing on extract
+        path=None,  # path to extract TODO: (not currently used for compress)
     ):
 
         if not filename:  # filename needed  eg tar --file <filename>
@@ -132,6 +133,7 @@ class SuperTar:
         self._compress = compress
         self._ignore_failed_read = ignore_failed_read
         self._dereference = dereference
+        self._path = path
 
         # set inital tar options,
         self._flags = ["tar"]
@@ -163,7 +165,11 @@ class SuperTar:
             raise Exception("Invalid Compressor {compress}")
 
     def addfromfile(self, path):
-        """load list of files from file eg tar -cvf output.tar --files-from=<file>"""
+        """Load list of files from file eg tar -cvf output.tar --files-from=<file>."""
+        # check that were not told to use a path
+        if self._path:
+            raise Exception("cannot provide a path and use addfromfile()")
+
         self._flags.append(f"--files-from={path}")
 
     def addfrompath(self, path):
@@ -227,7 +233,13 @@ class SuperTar:
 
         # set compress program
         self._setComp(what_comp(self.filename))
+
+        # add path last if set
+        if self._path:
+            self._flags.append(str(self._path))
+
         logging.debug(f"Tar invoked with: {self._flags}")
+
         try:
             subprocess.run(self._flags, check=True)  # nosec
         except Exception as e:

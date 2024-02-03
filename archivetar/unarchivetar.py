@@ -38,6 +38,13 @@ def parse_args(args):
         default=num_cores,
     )
 
+    parser.add_argument(
+        "--folder",
+        help="Extract/Search only the given folder similar to tar -xf a.tar folder/sub",
+        type=str,
+        default=None,
+    )
+
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument(
         "-v",
@@ -149,6 +156,8 @@ def main(argv):
             t_args = {}  # arguments to tar constructor
             if args.tar_verbose:
                 t_args["verbose"] = True
+            if args.folder:
+                t_args["path"] = args.folder
 
             e_args = {}  # arguments to extract()
             if args.keep_old_files:
