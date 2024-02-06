@@ -47,8 +47,8 @@ env = Env()
 
 # defaults used for development
 # overridden with AT_MPIRUN and AT_MPIFILEUTILS
-fileutils = "/sw/pkgs/arc/archivetar/0.14.0/install"
-mpirun = "/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun"
+fileutils = "/sw/pkgs/arc/archivetar/0.17.0/install"
+mpirun = "/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.6/bin/mpirun"
 
 
 class DwalkLine:

@@ -107,11 +107,11 @@ def main(argv):
 
     drm = DRm(
         inst=env.str(
-            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.14.0/install"
+            "AT_MPIFILEUTILS", default="/sw/pkgs/arc/archivetar/0.17.0/install"
         ),
         mpirun=env.str(
             "AT_MPIRUN",
-            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.4/bin/mpirun",
+            default="/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.6/bin/mpirun",
         ),
         progress="10",
         verbose=args.verbose,
