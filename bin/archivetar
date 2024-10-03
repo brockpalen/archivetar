@@ -34,12 +34,12 @@ def main():
     elif at_slurm_offload and shutil.which("srun"):
             print("\033[34m==>\033[35m Running archivetar within SLURM\033[0m")
             # Get environment variables or use default values
-            tasks = os.getenv("ARCHIVETAR_TASKS", "8")  # Default to 8 tasks if ARCHIVETAR_TASKS is not set
-            mem = os.getenv("ARCHIVETAR_MEM", "40G")    # Default to 40G if ARCHIVETAR_MEM is not set
-            partition = os.getenv("ARCHIVETAR_PAR", "archive") # Default to archive if ARCHIVETAR_PAR is not set
+            tasks = os.getenv("AT_TASKS", "8")  # Default to 8 tasks if ARCHIVETAR_TASKS is not set
+            mem = os.getenv("AT_MEM", "40G")    # Default to 40G if ARCHIVETAR_MEM is not set
+            partition = os.getenv("AT_PAR", "archive") # Default to archive if ARCHIVETAR_PAR is not set
 
             # Run Python script from within SLURM
-            cmd = f"srun --partition={partition} --cpu-bind=no --ntasks=1 --cpus-per-task={tasks} --mem={mem} --job-name=archivetar_{os.getenv('USER')} --pty bash -c '.archivetar {' '.join(sys.argv[1:])}'"
+            cmd = f"srun --partition={partition} --cpu-bind=no --ntasks=1 --cpus-per-task={tasks} --mem={mem} --job-name=archivetar_{os.getenv('USER')} --time=14-00:00:00 --pty bash -c '.archivetar {' '.join(sys.argv[1:])}'"
             result = subprocess.run(cmd, shell=True)
             sys.exit(result.returncode)
     else:
