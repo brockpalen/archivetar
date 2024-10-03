@@ -1,21 +1,24 @@
-#!/usr/bin/env python3
-
-# Brock Palen
-# brockp@umich.edu
-# 7/2020
-#
-#  prep a directory for placement in dataden
-#  process:
-#    1. run mpiFileUtils / dwalk  (deafault sort in name / path order) all files < minsize
-#    2. Take resulting list build tar lists by summing size until > tarsize (before compression)
-#    3. Tar each list:  OR --dryrun create list with est size
-#       a. Create Index file of contents
-#       b. Optionally compress -z / -j  with gzip/pigz bzip/lbzip2 if installed
-#       c. Optionally purge
-#    4. (?) Kick out optimized untar script (pigz / lbzip2)
-
+import os
+import subprocess
 import sys
 
-import archivetar
+def main():
+    # Check for help options and run locally
+    if len(sys.argv) > 1 and (sys.argv[1] == "-h" or sys.argv[1] == "--help"):
+        print("\033[34m==>\033[32m Running locally for help option\033[0m")
+        subprocess.run([".archivetar", "-h"])
+        sys.exit(0)
 
-archivetar.main(sys.argv)
+    # Check if running inside a SLURM job
+    slurm_job_id = os.getenv("SLURM_JOB_ID")
+    if slurm_job_id:
+        # Run inside SLURM
+        subprocess.run([".archivetar"] + sys.argv[1:])
+    else:
+        print("\033[34m==>\033[35m Running archivetar within SLURM\033[0m")
+        # Run Python script from within SLURM
+        cmd = f"srun --partition=archive --ntasks-per-node=8 --mem=40G --job-name=archivetar_{os.getenv('USER')} --pty bash -c '.archivetar {' '.join(sys.argv[1:])}'"
+        subprocess.run(cmd, shell=True)
+
+if __name__ == "__main__":
+    main()
