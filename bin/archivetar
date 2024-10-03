@@ -29,7 +29,8 @@ def main():
 
     if slurm_job_id:
         # Run locally inside SLURM without executing another SLURM job.
-        subprocess.run([".archivetar"] + sys.argv[1:])
+        result = subprocess.run([".archivetar"] + sys.argv[1:])
+        sys.exit(result.returncode)
     elif at_slurm_offload and shutil.which("srun"):
             print("\033[34m==>\033[35m Running archivetar within SLURM\033[0m")
             # Get environment variables or use default values
@@ -38,11 +39,13 @@ def main():
             partition = os.getenv("ARCHIVETAR_PAR", "archive") # Default to archive if ARCHIVETAR_PAR is not set
 
             # Run Python script from within SLURM
-            cmd = f"srun --partition={partition} --ntasks-per-node={tasks} --mem={mem} --job-name=archivetar_{os.getenv('USER')} --pty bash -c '.archivetar {' '.join(sys.argv[1:])}'"
-            subprocess.run(cmd, shell=True)
+            cmd = f"srun --partition={partition} --cpu-bind=no --ntasks=1 --cpus-per-task={tasks} --mem={mem} --job-name=archivetar_{os.getenv('USER')} --pty bash -c '.archivetar {' '.join(sys.argv[1:])}'"
+            result = subprocess.run(cmd, shell=True)
+            sys.exit(result.returncode)
     else:
         # Run locally without SLURM
-        subprocess.run([".archivetar"] + sys.argv[1:])
+        result = subprocess.run([".archivetar"] + sys.argv[1:])
+        sys.exit(result.returncode)
 
 
 if __name__ == "__main__":
