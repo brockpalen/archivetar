@@ -1,7 +1,31 @@
 import os
 import subprocess
+import re
 import sys
 import shutil
+from pathlib import Path
+
+
+def get_max_wall_time(max_epoch_time, mwt, default_time):
+    """
+    Extracts the max wall time from the output of the mwt file, or returns a default value.
+    """
+    if max_epoch_time.exists() and mwt.exists():
+        try:
+            # Execute the command and store the output
+            output = subprocess.check_output([str(mwt)], text=True)
+
+            # Extract the time using regex
+            time_match = re.search(r'\d{2}-\d{2}:\d{2}:\d{2}', output)
+
+            # Return the extracted time or the default
+            return time_match.group(0) if time_match else default_time
+
+        except Exception as e:
+            raise Exception(f"Unknown error calling maxwalltime {e}")
+    
+    # Return the default value if the files don't exist
+    return default_time
 
 def main():
     '''
@@ -37,9 +61,20 @@ def main():
             tasks = os.getenv("AT_TASKS", "8")  # Default to 8 tasks if ARCHIVETAR_TASKS is not set
             mem = os.getenv("AT_MEM", "40G")    # Default to 40G if ARCHIVETAR_MEM is not set
             partition = os.getenv("AT_PAR", "archive") # Default to archive if ARCHIVETAR_PAR is not set
+            default_time = os.getenv("AT_DEFAULT_TIME", "14-00:00:00") # Default to archive if AT_DEFAULT_TIME is not set
+            
+            # Extract environment variable
+            cluster_name = os.environ["CLUSTER_NAME"]
 
+            # Paths for time management
+            max_epoch_time = Path("/sw/pkgs/arc/usertools/etc/") / f"{cluster_name}_next_maintenance_epochtime"
+            mwt = Path("/sw/pkgs/arc/usertools/bin/maxwalltime")
+
+            # Usage
+            _maxwalltime = get_max_wall_time(max_epoch_time, mwt, default_time)
+            print(f"\033[34m==>\033[35m Requesting {_maxwalltime} maximum wall time\033[0m")
             # Run Python script from within SLURM
-            cmd = f"srun --partition={partition} --cpu-bind=no --ntasks=1 --cpus-per-task={tasks} --mem={mem} --job-name=archivetar_{os.getenv('USER')} --time=14-00:00:00 --pty bash -c '.archivetar {' '.join(sys.argv[1:])}'"
+            cmd = f"srun --partition={partition} --cpu-bind=no --ntasks=1 --cpus-per-task={tasks} --mem={mem} --job-name=archivetar_{os.getenv('USER')} --time={_maxwalltime} --pty bash -c '.archivetar {' '.join(sys.argv[1:])}'"
             result = subprocess.run(cmd, shell=True)
             sys.exit(result.returncode)
     else:
