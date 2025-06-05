@@ -87,6 +87,11 @@ def parse_args(args):
         help="don't replace existing files that are newer than their archive copies",
         action="store_true",
     )
+    tar_opts.add_argument(
+        "--tar-options",
+        help="ADVANCED: pass arbitrary tar options to the tar command. eg. --tar-options='--sparse --xattr'",
+        default=None,
+    )
 
     args = parser.parse_args(args)
     return args
@@ -191,6 +196,8 @@ def main(argv):
                 t_args["verbose"] = True
             if args.folder:
                 t_args["path"] = args.folder
+            if args.tar_options:
+                t_args["extra_options"] = args.tar_options.split()
 
             e_args = {}  # arguments to extract()
             if args.keep_old_files:
