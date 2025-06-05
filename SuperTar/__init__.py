@@ -63,7 +63,10 @@ def find_lzma():
 
 def find_zstd():
     """find zstd if installed"""
+    zstdmt = shutil.which("zstdmt")
     zstd = shutil.which("zstd")
+    if zstdmt:
+        return zstdmt
     if zstd:
         return zstd
     else:
