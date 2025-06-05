@@ -123,6 +123,7 @@ class SuperTar:
         ignore_failed_read=False,  # pass --ignore-failed-read when creating files, does nothing on extract
         dereference=False,  # pass --dereference when creating files, does nothing on extract
         path=None,  # path to extract TODO: (not currently used for compress)
+        extra_options=None,  # list of additional options to pass to GNU tar
     ):
 
         if not filename:  # filename needed  eg tar --file <filename>
@@ -134,9 +135,15 @@ class SuperTar:
         self._ignore_failed_read = ignore_failed_read
         self._dereference = dereference
         self._path = path
+        self.extra_options = extra_options if extra_options is not None else []
 
         # set inital tar options,
         self._flags = ["tar"]
+
+        # add any extra flags passed with --tar-options=""
+        # add now so they apply to both archive() and extract()
+        # it is on the caller to use only valid tar options as this is an advanced feature
+        self._flags.extend(self.extra_options)
 
         if verbose:
             self._flags.append("--verbose")
@@ -199,6 +206,7 @@ class SuperTar:
             self._flags.append("--dereference")
 
         self._flags += ["--file", self.filename]
+
         logging.debug(f"Tar invoked with: {self._flags}")
         subprocess.run(self._flags, check=True)  # nosec
 

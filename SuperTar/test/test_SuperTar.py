@@ -29,6 +29,37 @@ def test_SuperTar(kwargs, expex):
 
 
 @pytest.mark.parametrize(
+    "kwargs,expex,expected_flags",
+    [
+        ({"filename": "mytar.tar"}, does_not_raise(), ["tar"]),
+        (
+            {"filename": "mytar.tar", "verbose": True},
+            does_not_raise(),
+            ["tar", "--verbose"],
+        ),
+        (
+            {"filename": "mytar.tar", "extra_options": ["--sparse", "--xattr"]},
+            does_not_raise(),
+            ["tar", "--sparse", "--xattr"],
+        ),
+    ],
+)
+def test_SuperTar_options_test(kwargs, expex, expected_flags):
+    """Check handeling of options being passed show up in the command.
+
+    kwargs : options to pass to SuperTar
+    expec  : expected exception
+    expected_flags : The expected built out tar command to that point
+    """
+
+    with expex:
+        tar = SuperTar(**kwargs)
+        pp(tar._flags)
+        if expected_flags is not None:
+            assert tar._flags == expected_flags
+
+
+@pytest.mark.parametrize(
     "kwargs,kresult,kwresult,expex",
     [
         (
