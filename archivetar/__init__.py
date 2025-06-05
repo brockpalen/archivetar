@@ -545,6 +545,8 @@ def main(argv):
                     t_args["compress"] = "LZ4"
                 if args.xz:
                     t_args["compress"] = "XZ"
+                if args.tar_options:
+                    t_args["extra_options"] = args.tar_options.split()
 
                 q.put((t_args, tar_list, index_p))  # put work on the queue
 

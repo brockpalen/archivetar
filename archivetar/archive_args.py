@@ -198,6 +198,11 @@ def parse_args(args):
         help="Pass --dereference to tar, Follow symlinks; archive and dump the files they point to.",
         action="store_true",
     )
+    tar_opts.add_argument(
+        "--tar-options",
+        help="ADVANCED: pass arbitrary tar options to the tar command. eg. --tar-options='--sparse --xattr'",
+        default=None,
+    )
 
     compression = parser.add_mutually_exclusive_group()
     compression.add_argument(
