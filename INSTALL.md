@@ -23,7 +23,8 @@ Building archivetar
  * python3.6+
  * `pip install pipenv`
  * `pipenv install`
- * `pipenv run pyinstaller bin/archivetar -p . --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller bin/archivetar --collect-all globus_sdk -p . --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller bin/.archivetar --collect-all globus_sdk -p . --onefile`   # create executable no need for pipenv
  * `pipenv run pyinstaller bin/archivepurge -p . --onefile`   # create executable no need for pipenv
  * `pipenv run pyinstaller bin/unarchivetar -p . --onefile`   # create executable no need for pipenv
  * `pipenv run pyinstaller bin/archivescan -p . --onefile`   # create executable no need for pipenv

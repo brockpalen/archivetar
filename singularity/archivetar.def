@@ -13,7 +13,8 @@ From: ubuntu:22.04
     bash build.sh
     pip3 install pipenv
     pipenv install --dev --python 3.10
-    pipenv run pyinstaller bin/archivetar   -p . --onefile
+    pipenv run pyinstaller --collect-all globus_sdk bin/archivetar   -p . --onefile
+    pipenv run pyinstaller --collect-all globus_sdk bin/.archivetar   -p . --onefile
     pipenv run pyinstaller bin/unarchivetar -p . --onefile
     pipenv run pyinstaller bin/archivepurge -p . --onefile
     pipenv run pyinstaller bin/archivescan  -p . --onefile
