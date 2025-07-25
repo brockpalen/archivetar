@@ -57,7 +57,40 @@ container (e.g. see `singularity exec archivetar_master.sif env | grep ^AT_`),
 so you would only need to [re]define the optional ones to suite your site's
 needs.
 
+### Runtime Configuration
+Runtime Environment Variables Used
 
+`AT_SLURM_OFFLOAD`
+* Determines if SLURM execution is enabled. If set (to any value), SLURM is used for job submission.
+
+`SLURM_JOB_ID`
+* Indicates if the script is running inside a SLURM job.
+
+`AT_TASKS`
+* Determines the number of cores for the SLURM job. Default: 8
+
+`AT_MEM`
+* Specifies memory allocation for the SLURM job. Default: 40G
+
+`AT_PAR`
+* Sets the partition for the SLURM job. Default: archive
+
+`AT_DEFAULT_TIME`
+* Sets the default wall time for the SLURM job. Default: 14-00:00:00
+
+`CLUSTER_NAME`
+* Used to construct the path for the cluster-specific maintenance epoch time file.
+
+`USER`
+* Used in the SLURM job name for identification
+
+`SLURM_ACCOUNT`
+* Used by Slurm as the account under the which the job is submitted if `AT_SLURM_OFFLOAD` is enabled. Defaults to the user's default Slurm subaccount.
+* Note, if the user's default subaccount is a class account -- (class accounts have walltime limits) then the user may experience an AssocMaxWallDurationPerJobLimit error. In such cases, its advised to pre-pend `SLURM_ACCOUNT=<non-class subaccount> to your `archivetar` commands.
+```srun: error: AssocMaxWallDurationPerJobLimit
+srun: error: Unable to allocate resources: Job violates accounting/QOS policy
+(job submit limit, user's size and/or time limits)
+```
 #### Dev options
 
  * pipenv install --dev
