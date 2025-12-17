@@ -18,6 +18,7 @@
 # * mpibzip2
 
 import datetime
+import hashlib
 import logging
 import multiprocessing as mp
 import os
@@ -159,6 +160,35 @@ class DwalkParser:
 
 
 #############  MAIN  ################
+
+
+def create_sha256_manifest_from_file(path):
+    """
+    Create a manifest file suitable for sha256sum -c from a file containing lists of files
+    """
+    file_list = pathlib.Path(path)
+    sha_list = file_list.with_suffix(".sha256")
+    with sha_list.open("w") as f:
+        for line in file_list.read_text().splitlines():
+            path = line.strip()
+            f.write(f"{sha256_of(path)} {line}\n")
+
+    return sha_list
+
+
+def sha256_of(path, bufsize=1 << 20):
+    """
+    Calculate a shaw256 hash of a given file.
+
+    Parameters:
+        path (str/pathlib) Path to file
+        bufsize (int) Size of buffer to read at a time
+    """
+    h = hashlib.sha256()
+    with pathlib.Path(path).open("rb") as f:
+        while chunk := f.read(bufsize):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def build_list(path=False, prefix=False, savecache=False, filters=None):
@@ -325,6 +355,10 @@ def process(q, out_q, iolock, args):
                 tar.addfromfile(tar_list)
             tar.archive()  # this is the long running portion so let run outside the lock it prints nothing anyway
             filesize = pathlib.Path(tar.filename).stat().st_size
+
+            # create checksums for tared files
+            sha256_manifest = create_sha256_manifest_from_file(tar_list)
+
             with iolock:
                 logging.info(
                     f"Complete {tar.filename} Size: {humanfriendly.format_size(filesize)}"
@@ -351,6 +385,17 @@ def process(q, out_q, iolock, args):
                     index_p = pathlib.Path(index).resolve()
                     logging.debug(f"Adding file {index_p} to Globus Transfer")
                     globus.add_item(index_p, label=f"{path.name}", in_root=True)
+
+                    # only add checksums if they exist
+                    sha256_p = sha256_manifest.resolve()
+                    if sha256_p.is_file():
+                        logging.debug(f"Adding file {sha256_p} to Globus Transfer")
+                        globus.add_item(sha256_p, label=f"{path.name}", in_root=True)
+                    else:
+                        logging.info(
+                            f"Skipping sha256 for {path.name}: file does not exist"
+                        )
+
                     taskid = globus.submit_pending_transfer()
                     logging.info(
                         f"Globus Transfer of Small file tar {path.name} : {taskid}"
@@ -367,6 +412,9 @@ def process(q, out_q, iolock, args):
                     tar_list.unlink()
                     logging.info(f"Deleting {index_p}")
                     index_p.unlink()
+                    if sha256_p.is_file():
+                        logging.info(f"Deleting {sha256_p}")
+                        sha256_p.unlink()
         except GlobusFailedTransfer as e:
             logging.error(f"error with globus transfer of: {tar.filename}")
             out_q.put((-1, tar.filename, e))
@@ -392,6 +440,7 @@ def validate_prefix(prefix, path=None):
     tars = find_prefix_files(prefix, path)
     tars.extend(find_prefix_files(prefix, path, suffix="index.txt"))
     tars.extend(find_prefix_files(prefix, path, suffix="DONT_DELETE.txt"))
+    tars.extend(find_prefix_files(prefix, path, suffix="DONT_DELETE.sha256"))
 
     if len(tars) != 0:
         logging.critical(f"Prefix {prefix} conflicts with current files {tars}")
