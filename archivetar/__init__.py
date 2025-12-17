@@ -99,10 +99,10 @@ class DwalkParser:
         else:
             raise Exception(f"{self.path} doesn't exist")
 
-    def getpath(self):
+    def getpath(self, stripcwd=False):
         """Get path one line at a time."""
         for line in self.path:
-            pl = DwalkLine(line=line, stripcwd=False)
+            pl = DwalkLine(line=line, stripcwd=stripcwd)
             yield pl.path
 
     def tarlist(
@@ -185,6 +185,7 @@ def sha256_of(path, bufsize=1 << 20):
         bufsize (int) Size of buffer to read at a time
     """
     h = hashlib.sha256()
+    logging.debug(f"Calculating Checksum for {path}")
     with pathlib.Path(path).open("rb") as f:
         while chunk := f.read(bufsize):
             h.update(chunk)
@@ -544,6 +545,40 @@ def main(argv):
         large_taskid = globus.submit_pending_transfer()
         logging.info(f"Globus Transfer of Oversize files: {large_taskid}")
 
+    # this may look less efficent to do checksums after transfer,
+    # it's not though globus transfers are async and isn't checked until the end
+    # so lets calculate checksums while the transfers happen
+    if not args.dryrun:
+        logging.info("----> Calculating Checksums for large files")
+        bundle_dir = pathlib.Path(args.bundle_dir or pathlib.Path.cwd())
+        sha_file = bundle_dir / f"{args.prefix}-large.DONT_DELETE.sha256"
+        logging.debug(f"Large File sha256 manifest is {sha_file}")
+        with sha_file.open("w") as f:
+            over_p = DwalkParser(path=over_t)
+            for path in over_p.getpath(stripcwd=True):
+                stripped = path.decode("utf-8").strip()
+                sha256 = sha256_of(stripped)
+                f.write(f"{sha256} {stripped}\n")
+        if args.destination_dir:
+            # not sure why I cannot do a second transfer with the same globus object
+            globus = GlobusTransfer(
+                args.source,
+                args.destination,
+                args.destination_dir,
+                # note notify are the reverse of the SDK
+                notify_on_succeeded=args.no_notify_on_succeeded,
+                notify_on_failed=args.no_notify_on_failed,
+                notify_on_inactive=args.no_notify_on_inactive,
+                fail_on_quota_errors=args.fail_on_quota_errors,
+                skip_source_errors=args.skip_source_errors,
+                preserve_timestamp=args.preserve_timestamp,
+            )
+            globus.add_item(sha_file, label=f"Large File sha256 manifest {args.prefix}")
+            large_sha256_taskid = globus.submit_pending_transfer()
+            logging.info(
+                f"Globus Transfer of Oversize files sha256 manifest: {large_sha256_taskid}"
+            )
+
     # Dwalk list parser
     logging.info(
         f"----> [Phase 2] Parse fileted list into sublists of size {args.tar_size}"
@@ -621,6 +656,8 @@ def main(argv):
         # large_taskid only esists if --size given to create a large file option
         # this will break once we have 1EB files
         if args.wait and large_taskid:
+            logging.debug("Wait for large_sh256_taskid to finish")
+            globus.task_wait(large_sha256_taskid)
             logging.debug("Wait for large_taskid to finish")
             globus.task_wait(large_taskid)
 
