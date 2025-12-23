@@ -94,7 +94,7 @@ def test_build_list(kwargs, outcache, monkeypatch):
 
     mock_cwd = MagicMock()
     mock_cwd.return_value = pathlib.Path("hello")
-    monkeypatch.setattr(archivetar.pathlib.Path, "cwd", mock_cwd)
+    monkeypatch.setattr(archivetar.Path, "cwd", mock_cwd)
 
     # doesn't work because you cant patch internals that are in C
     # use https://pypi.org/project/pytest-freezegun/

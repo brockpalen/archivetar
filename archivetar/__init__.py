@@ -22,10 +22,10 @@ import hashlib
 import logging
 import multiprocessing as mp
 import os
-import pathlib
 import re
 import sys
 import tempfile
+from pathlib import Path
 from subprocess import CalledProcessError  # nosec
 
 import humanfriendly
@@ -91,7 +91,7 @@ class DwalkLine:
 class DwalkParser:
     def __init__(self, path=False):
         # check that path exists
-        path = pathlib.Path(path)
+        path = Path(path)
         self.indexcount = 1
         if path.is_file():
             logging.debug(f"using {path} as input for DwalkParser")
@@ -118,10 +118,10 @@ class DwalkParser:
 
         if bundle_path:
             # set outpath to this location
-            outpath = pathlib.Path(bundle_path)
+            outpath = Path(bundle_path)
         else:
             # set to cwd
-            outpath = pathlib.Path.cwd()
+            outpath = Path.cwd()
 
         logging.debug(f"Indexes and lists will be written to: {outpath}")
 
@@ -162,11 +162,106 @@ class DwalkParser:
 #############  MAIN  ################
 
 
+def get_relative_path(filepath, cwd=None):
+    """Convert absolute path to relative path.
+
+    This is useful for Globus logs that return absolute path but we want just relative to some path.
+    /gpfs/accounts/support_root/support/brockp/box-copy/ARC Projects/P874443 - ARC Data Center Upgrade/874443 Data Center Upgrade P874443 Project Summary Mar-18.xlsx
+    Becomes
+    P874443 - ARC Data Center Upgrade/874443 Data Center Upgrade P874443 Project Summary Mar-18.xlsx
+    If cwd is
+    /gpfs/accounts/support_root/support/brockp/box-copy/ARC Projects/
+
+    Parameters:
+        filepath (path): Full absolute path with leaading /
+        cwd (path): Leading path to strip Defeault cwd
+    """
+    if cwd is None:
+        cwd = Path.cwd()
+    else:
+        cwd = Path(cwd)
+
+    # Resolve symlinks and normalize both paths
+    filepath_resolved = Path(filepath).resolve()
+    cwd_resolved = cwd.resolve()
+
+    try:
+        # Try to get the relative path
+        rel = filepath_resolved.relative_to(cwd_resolved)
+    except ValueError:
+        # If the file isn't under cwd, just return basename
+        rel = filepath_resolved.name
+    return str(rel)
+
+
+def globus_transfer_singleton(args, path, label="Globus Singleton"):
+    """
+    Transfer a single file using globus with default options.
+
+    args (argparse): Arguments struct
+    path (path): Files to upload
+    label (str): Label for globus transfer
+
+    returns:
+        taskid (str): Globus task id
+    """
+    globus = GlobusTransfer(
+        args.source,
+        args.destination,
+        args.destination_dir,
+        # note notify are the reverse of the SDK
+        notify_on_succeeded=args.no_notify_on_succeeded,
+        notify_on_failed=args.no_notify_on_failed,
+        notify_on_inactive=args.no_notify_on_inactive,
+        fail_on_quota_errors=args.fail_on_quota_errors,
+        skip_source_errors=args.skip_source_errors,
+        preserve_timestamp=args.preserve_timestamp,
+    )
+    globus.add_item(Path(path).resolve(), label=f"{label}: {args.prefix}")
+    taskid = globus.submit_pending_transfer()
+    logging.info(f"Globus Transfer: {label} taskid: {taskid}")
+    return taskid
+
+
+def create_sha1_manifest_from_file(path):
+    """
+    Create a manifest file suitable for sha1sum -c from a file containing lists of files.
+
+    path (str): Path to file with list of files to checksum
+    """
+    file_list = Path(path)
+    sha_list = file_list.with_suffix(".sha1")
+    with sha_list.open("w") as f:
+        for line in file_list.read_text().splitlines():
+            path = line.strip()
+            f.write(f"{sha1_of(path)} {line}\n")
+
+    return sha_list
+
+
+def sha1_of(path, bufsize=1 << 20):
+    """
+    Calculate a sha1 hash of a given file.
+
+    Globus currently uses sha1 for checksums
+
+    Parameters:
+        path (str/pathlib) Path to file
+        bufsize (int) Size of buffer to read at a time
+    """
+    h = hashlib.sha1(usedforsecurity=False)
+    logging.debug(f"Calculating Checksum for {path}")
+    with Path(path).open("rb") as f:
+        while chunk := f.read(bufsize):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def create_sha256_manifest_from_file(path):
     """
     Create a manifest file suitable for sha256sum -c from a file containing lists of files
     """
-    file_list = pathlib.Path(path)
+    file_list = Path(path)
     sha_list = file_list.with_suffix(".sha256")
     with sha_list.open("w") as f:
         for line in file_list.read_text().splitlines():
@@ -184,9 +279,9 @@ def sha256_of(path, bufsize=1 << 20):
         path (str/pathlib) Path to file
         bufsize (int) Size of buffer to read at a time
     """
-    h = hashlib.sha256()
+    h = hashlib.sha256(usedforsecurity=False)
     logging.debug(f"Calculating Checksum for {path}")
-    with pathlib.Path(path).open("rb") as f:
+    with Path(path).open("rb") as f:
         while chunk := f.read(bufsize):
             h.update(chunk)
     return h.hexdigest()
@@ -237,7 +332,7 @@ def build_list(path=False, prefix=False, savecache=False, filters=None):
     datestr = today.strftime("%Y-%m-%d-%H-%M-%S")
 
     # put into cwd or TMPDIR ?
-    c_path = pathlib.Path.cwd() if savecache else pathlib.Path(tempfile.gettempdir())
+    c_path = Path.cwd() if savecache else Path(tempfile.gettempdir())
     cache = c_path / f"{prefix}-{datestr}.cache"
     print(f"Scan saved to {cache}")
 
@@ -275,9 +370,9 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
         umask=0o077,  # set premissions to only the user invoking
     )
 
-    ut_path = pathlib.Path(tempfile.gettempdir())
+    ut_path = Path(tempfile.gettempdir())
     u_textout = ut_path / f"{prefix}.under.txt"
-    uc_path = pathlib.Path.cwd() if purgelist else pathlib.Path(tempfile.gettempdir())
+    uc_path = Path.cwd() if purgelist else Path(tempfile.gettempdir())
     u_cacheout = uc_path / f"{prefix}.under.cache"
 
     # start the actual scan
@@ -293,7 +388,7 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
         umask=0o077,  # set premissions to only the user invoking
     )
 
-    symlink_path = pathlib.Path(tempfile.gettempdir())
+    symlink_path = Path(tempfile.gettempdir())
     symlink_textout = symlink_path / f"{prefix}.symlink.txt"
 
     # start the actual scan
@@ -314,7 +409,7 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
         umask=0o077,  # set premissions to only the user invoking
     )
 
-    ot_path = pathlib.Path(tempfile.gettempdir())
+    ot_path = Path(tempfile.gettempdir())
     o_textout = ot_path / f"{prefix}.over.txt"
 
     # start the actual scan
@@ -330,7 +425,7 @@ def filter_list(path=False, size=False, prefix=False, purgelist=False):
         umask=0o077,  # set premissions to only the user invoking
     )
 
-    at_path = pathlib.Path(tempfile.gettempdir())
+    at_path = Path(tempfile.gettempdir())
     a_textout = at_path / f"{prefix}.at.txt"
 
     # start the actual scan
@@ -355,10 +450,12 @@ def process(q, out_q, iolock, args):
                 tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
                 tar.addfromfile(tar_list)
             tar.archive()  # this is the long running portion so let run outside the lock it prints nothing anyway
-            filesize = pathlib.Path(tar.filename).stat().st_size
+            filesize = Path(tar.filename).stat().st_size
 
             # create checksums for tared files
-            sha256_manifest = create_sha256_manifest_from_file(tar_list)
+            if args.checksum:
+                logging.debug(f"Checksums requested making for files in tar {tar_list}")
+                checksum_manifest = create_sha1_manifest_from_file(tar_list)
 
             with iolock:
                 logging.info(
@@ -377,24 +474,24 @@ def process(q, out_q, iolock, args):
                         skip_source_errors=args.skip_source_errors,
                         preserve_timestamp=args.preserve_timestamp,
                     )
-                    path = pathlib.Path(tar.filename).resolve()
+                    path = Path(tar.filename).resolve()
                     logging.debug(f"Adding file {path} to Globus Transfer")
                     globus.add_item(path, label=f"{path.name}", in_root=True)
-                    tar_list = pathlib.Path(tar_list).resolve()
+                    tar_list = Path(tar_list).resolve()
                     logging.debug(f"Adding file {tar_list} to Globus Transfer")
                     globus.add_item(tar_list, label=f"{path.name}", in_root=True)
-                    index_p = pathlib.Path(index).resolve()
+                    index_p = Path(index).resolve()
                     logging.debug(f"Adding file {index_p} to Globus Transfer")
                     globus.add_item(index_p, label=f"{path.name}", in_root=True)
 
                     # only add checksums if they exist
-                    sha256_p = sha256_manifest.resolve()
-                    if sha256_p.is_file():
-                        logging.debug(f"Adding file {sha256_p} to Globus Transfer")
-                        globus.add_item(sha256_p, label=f"{path.name}", in_root=True)
+                    checksum_p = checksum_manifest.resolve()
+                    if checksum_p.is_file():
+                        logging.debug(f"Adding file {checksum_p} to Globus Transfer")
+                        globus.add_item(checksum_p, label=f"{path.name}", in_root=True)
                     else:
                         logging.info(
-                            f"Skipping sha256 for {path.name}: file does not exist"
+                            f"Skipping checksum for {path.name}: file does not exist"
                         )
 
                     taskid = globus.submit_pending_transfer()
@@ -413,9 +510,9 @@ def process(q, out_q, iolock, args):
                     tar_list.unlink()
                     logging.info(f"Deleting {index_p}")
                     index_p.unlink()
-                    if sha256_p.is_file():
-                        logging.info(f"Deleting {sha256_p}")
-                        sha256_p.unlink()
+                    if checksum_p.is_file():
+                        logging.info(f"Deleting {checksum_p}")
+                        checksum_p.unlink()
         except GlobusFailedTransfer as e:
             logging.error(f"error with globus transfer of: {tar.filename}")
             out_q.put((-1, tar.filename, e))
@@ -441,7 +538,7 @@ def validate_prefix(prefix, path=None):
     tars = find_prefix_files(prefix, path)
     tars.extend(find_prefix_files(prefix, path, suffix="index.txt"))
     tars.extend(find_prefix_files(prefix, path, suffix="DONT_DELETE.txt"))
-    tars.extend(find_prefix_files(prefix, path, suffix="DONT_DELETE.sha256"))
+    tars.extend(find_prefix_files(prefix, path, suffix="DONT_DELETE.sha1"))
 
     if len(tars) != 0:
         logging.critical(f"Prefix {prefix} conflicts with current files {tars}")
@@ -475,6 +572,9 @@ def main(argv):
     if not args.globus_verbose:
         globus_logger.setLevel(logging.WARNING)
         urllib_logger.setLevel(logging.WARNING)
+
+    # initialize locals
+    large_taskid = None
 
     # check that selected prefix is usable
     validate_prefix(args.prefix, path=args.bundle_dir)
@@ -538,7 +638,7 @@ def main(argv):
         for path in over_p.getpath():
             path = path.rstrip(b"\n")  # strip trailing newline
             path = path.decode("utf-8")  # convert byte array to string
-            path = pathlib.Path(path)
+            path = Path(path)
             logging.debug(f"Adding file {path} to Globus Transfer")
             globus.add_item(path, label=f"Large File List {args.prefix}")
 
@@ -548,35 +648,44 @@ def main(argv):
     # this may look less efficent to do checksums after transfer,
     # it's not though globus transfers are async and isn't checked until the end
     # so lets calculate checksums while the transfers happen
-    if not args.dryrun:
-        logging.info("----> Calculating Checksums for large files")
-        bundle_dir = pathlib.Path(args.bundle_dir or pathlib.Path.cwd())
-        sha_file = bundle_dir / f"{args.prefix}-large.DONT_DELETE.sha256"
-        logging.debug(f"Large File sha256 manifest is {sha_file}")
-        with sha_file.open("w") as f:
-            over_p = DwalkParser(path=over_t)
-            for path in over_p.getpath(stripcwd=True):
-                stripped = path.decode("utf-8").strip()
-                sha256 = sha256_of(stripped)
-                f.write(f"{sha256} {stripped}\n")
-        if args.destination_dir:
-            # not sure why I cannot do a second transfer with the same globus object
-            globus = GlobusTransfer(
-                args.source,
-                args.destination,
-                args.destination_dir,
-                # note notify are the reverse of the SDK
-                notify_on_succeeded=args.no_notify_on_succeeded,
-                notify_on_failed=args.no_notify_on_failed,
-                notify_on_inactive=args.no_notify_on_inactive,
-                fail_on_quota_errors=args.fail_on_quota_errors,
-                skip_source_errors=args.skip_source_errors,
-                preserve_timestamp=args.preserve_timestamp,
+    if not args.dryrun and args.checksum:
+        # we only calculate checksums locally for large files if Globus is not available
+        # we calculate checksums if requested to by --force-local-checksum
+        if not args.destination_dir or args.force_local_checksum:
+            large_checksum_wrote_anything = (
+                False  # used to track if antyhing is written
             )
-            globus.add_item(sha_file, label=f"Large File sha256 manifest {args.prefix}")
-            large_sha256_taskid = globus.submit_pending_transfer()
+            logging.info("----> Calculating Checksums for large files locally")
+            bundle_dir = Path(args.bundle_dir or Path.cwd())
+            sha_file = bundle_dir / f"{args.prefix}-large.DONT_DELETE.sha1"
+            logging.debug(f"Large File checksum  manifest is {sha_file}")
+            with sha_file.open("w") as f:
+                over_p = DwalkParser(path=over_t)
+                for path in over_p.getpath(stripcwd=True):
+                    stripped = path.decode("utf-8").strip()
+                    sha1 = sha1_of(stripped)
+                    f.write(f"{sha1} {stripped}\n")
+                    large_checksum_wrote_anything = True
+
+            # if we are here someone asked for local checksums
+            # but is using globus to upload so lets upload now
+            if args.destination_dir and large_checksum_wrote_anything:
+                large_checksum_taskid = globus_transfer_singleton(
+                    args,
+                    sha_file,
+                    label=f"Oversize files checksum manifest",
+                )
+
+                logging.info(
+                    f"Globus Transfer of Oversize files checksum manifest: {large_checksum_taskid}"
+                )
+
+            if not large_checksum_wrote_anything:
+                logging.info("No large files found removing empty checksum file")
+                sha_file.unlink()  # delete empty file nothing was written
+        elif not args.dryrun and args.checksum:
             logging.info(
-                f"Globus Transfer of Oversize files sha256 manifest: {large_sha256_taskid}"
+                "----> Checksums will be gatherd from Globus at end of packaing"
             )
 
     # Dwalk list parser
@@ -604,8 +713,7 @@ def main(argv):
                 # if remove
                 if args.bundle_dir:
                     t_args = {
-                        "filename": pathlib.Path(args.bundle_dir)
-                        / f"{args.prefix}-{index}.tar"
+                        "filename": Path(args.bundle_dir) / f"{args.prefix}-{index}.tar"
                     }
                 else:
                     t_args = {"filename": f"{args.prefix}-{index}.tar"}
@@ -655,11 +763,47 @@ def main(argv):
         # wait for large_taskid to finish
         # large_taskid only esists if --size given to create a large file option
         # this will break once we have 1EB files
-        if args.wait and large_taskid:
-            logging.debug("Wait for large_sh256_taskid to finish")
-            globus.task_wait(large_sha256_taskid)
-            logging.debug("Wait for large_taskid to finish")
+        if (args.wait or args.checksum) and large_taskid:
+            if args.force_local_checksum:
+                logging.debug("Wait for large_checksum_taskid to finish")
+                globus.task_wait(large_checksum_taskid)
+
+            logging.info(
+                "Wait for large_taskid to finish for checksums disable with --no-checksum"
+            )
             globus.task_wait(large_taskid)
+
+            if args.checksum and not args.force_local_checksum:
+                # use globus data to build list of sha1
+                logging.info("----> Using Checksums from Globus")
+                bundle_dir = Path(args.bundle_dir or Path.cwd())
+                sha_file = bundle_dir / f"{args.prefix}-large.DONT_DELETE.sha1"
+                logging.debug(f"Large File checksum  manifest is {sha_file}")
+                with sha_file.open("w") as f:
+                    for entry in globus.task_successful_transfers(large_taskid):
+                        stripped = get_relative_path(entry["source_path"])
+                        logging.debug(f"{entry['checksum']} {stripped}\n")
+                        f.write(f"{entry['checksum']} {stripped}\n")
+
+                # now upload the checksums
+                large_checksum_taskid = globus_transfer_singleton(
+                    args,
+                    sha_file,
+                    label=f"Oversize files checksum manifest",
+                )
+
+                logging.info(
+                    f"Globus Transfer of Oversize files checksum manifest: {large_checksum_taskid}"
+                )
+                logging.debug("Wait for large_checksum_taskid to finish")
+                globus.task_wait(large_checksum_taskid)
+                if args.rm_at_files:
+                    logging.info("Deleting large_checksum file")
+                    sha_file.unlink()
+
+        # cleanup large checksum file
+        # It could be empty (no large files)
+        # It could be requested deleted --rm-at-files
 
         # check no pool workers had problems running the tar
         # any task that raised an exception should find a returncode on the out_q
