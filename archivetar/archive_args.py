@@ -223,6 +223,7 @@ def parse_args(args):
     )
 
     checksum_default = env.bool("AT_CHECKSUM", default=True)
+    local_checksum_default = env.bool("AT_FORCE_LOCAL_CHECKSUM", default=True)
     checksum = parser.add_argument_group(
         title="Checksum options",
         description="Control how archivetar creates and stores checksums of files accessed",
@@ -236,8 +237,9 @@ def parse_args(args):
     )
     checksum.add_argument(
         "--force-local-checksum",
-        action="store_true",
-        help="Force calculating checksums locally and not use Globus checksums. This only applies when using --size",
+        default=local_checksum_default,  #  TODO change to False when/if GLobus provides a way to probe supported checksum types
+        action=argparse.BooleanOptionalAction,
+        help="Force calculating checksums locally and not use Globus checksums. Use --no-force-local-checksum to test Globus checksums for --size files).",
     )
 
     globus = parser.add_argument_group(
