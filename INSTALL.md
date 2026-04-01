@@ -50,6 +50,8 @@ AT_MPIRUN=<path to mpirun used with mpifileutils>
 AT_SOURCE=<Globus UUID Default Collection>
 AT_DESTINATION=<Globus UUID Default Collection>
 AT_TAR_SIZE=<Default --tar-size>
+AT_CHECKSUM=<calulate checksums or not by default>
+AT_FORCE_LOCAL_CHECKSUM=<calculate locally or us use globus sha1 for large files>
 ```
 
 Singularity containers already have required variables defined inside the

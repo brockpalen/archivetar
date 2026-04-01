@@ -293,3 +293,14 @@ class GlobusTransfer:
         logging.debug(f"Submitted Transfer: {transfer['task_id']}")
         self.transfers.append(transfer)
         return transfer["task_id"]
+
+    def task_successful_transfers(self, task_id):
+        """
+        Get data about each file transfered in the task.
+
+        Paramter:
+            task_id (str): Globus transfer ID to check on
+        """
+
+        for entry in self.tc.task_successful_transfers(task_id):
+            yield entry
