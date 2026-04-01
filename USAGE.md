@@ -175,3 +175,15 @@ late.  It has 2 primary features `--checksum` or `--no-checksum` and
 `--no-force-local-checksum` or `--force-local-checksum` both are on by default.
 Disabeling local checksum for files filtered by `--size` when using globus
 will use the Globus calculated checksum from the transfer.
+
+To compare checksums grab the `*.sha1` files and run:
+
+```
+sha1sum -c *.sha1
+
+# optionally only print if a missmatch
+sha1sum --quiet -c *.sha1
+
+# If you have very fast storage or high latency storage
+ls *.sha1 | parallel sha1sum --quiet -c {} 
+```
