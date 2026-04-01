@@ -453,6 +453,7 @@ def process(q, out_q, iolock, args):
             filesize = Path(tar.filename).stat().st_size
 
             # create checksums for tared files
+            checksum_manifest = None
             if args.checksum:
                 logging.debug(f"Checksums requested making for files in tar {tar_list}")
                 checksum_manifest = create_sha1_manifest_from_file(tar_list)
@@ -485,14 +486,19 @@ def process(q, out_q, iolock, args):
                     globus.add_item(index_p, label=f"{path.name}", in_root=True)
 
                     # only add checksums if they exist
-                    checksum_p = checksum_manifest.resolve()
-                    if checksum_p.is_file():
-                        logging.debug(f"Adding file {checksum_p} to Globus Transfer")
-                        globus.add_item(checksum_p, label=f"{path.name}", in_root=True)
-                    else:
-                        logging.info(
-                            f"Skipping checksum for {path.name}: file does not exist"
-                        )
+                    if checksum_manifest is not None:
+                        checksum_p = checksum_manifest.resolve()
+                        if checksum_p.is_file():
+                            logging.debug(
+                                f"Adding file {checksum_p} to Globus Transfer"
+                            )
+                            globus.add_item(
+                                checksum_p, label=f"{path.name}", in_root=True
+                            )
+                        else:
+                            logging.info(
+                                f"Skipping checksum for {path.name}: file does not exist"
+                            )
 
                     taskid = globus.submit_pending_transfer()
                     logging.info(
