@@ -165,3 +165,13 @@ Several `archivetar` settings are controlled by environment variables (handy
 for setting or overriding defaults, or for site-specific customization, e.g.
 inside Lmod modules or personal shell starup files).  See the
 [configuration section of INSTALL.md](INSTALL.md#configuration) for details.
+
+
+Checksums
+---------
+
+The checksum feature is on by default as most find they want it when it's to
+late.  It has 2 primary features `--checksum` or `--no-checksum` and
+`--no-force-local-checksum` or `--force-local-checksum` both are on by default.
+Disabeling local checksum for files filtered by `--size` when using globus
+will use the Globus calculated checksum from the transfer.

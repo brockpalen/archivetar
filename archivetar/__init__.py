@@ -685,7 +685,7 @@ def main(argv):
                 sha_file.unlink()  # delete empty file nothing was written
         elif not args.dryrun and args.checksum:
             logging.info(
-                "----> Checksums will be gatherd from Globus at end of packaing"
+                "----> Checksums will be gatherd from Globus at end of packing"
             )
 
     # Dwalk list parser
