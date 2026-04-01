@@ -310,7 +310,4 @@ def parse_args(args):
 
     args = parser.parse_args(args)
 
-    # Ensure these options are not at the same time
-    if args.force_local_checksum and not args.checksum:
-        parser.error("--force-local-checksum cannot be used with --no-checksum")
     return args
