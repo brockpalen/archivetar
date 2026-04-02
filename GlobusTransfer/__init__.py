@@ -124,7 +124,9 @@ class GlobusTransfer:
                         "One of your endpoints requires domain constraints in order to be used.\n"
                         "You must login a second time to grant consents.\n\n"
                     )
-                    self.tc = self.do_native_app_authentication()
+                    self.tc = self.do_native_app_authentication(
+                        session_required_single_domain=self.session_required_single_domain
+                    )
             else:
                 clean = True
 
@@ -141,7 +143,9 @@ class GlobusTransfer:
             logging.debug("Saving tokens to {str(token_file)}")
             json.dump(tokens, f)
 
-    def do_native_app_authentication(self, scopes=TransferScopes.all):
+    def do_native_app_authentication(
+        self, scopes=TransferScopes.all, session_required_single_domain=None
+    ):
         """
         Does Native App Authentication Flow and returns a transfer client.
         """
@@ -152,8 +156,8 @@ class GlobusTransfer:
         # only pass session_required_single_domain if it's requested by the collection
         if self.session_required_single_domain:
             kwargs[
-                "self.session_required_single_domain"
-            ] = self.self.session_required_single_domain
+                "session_required_single_domain"
+            ] = self.session_required_single_domain
 
         authorize_url = self.client.oauth2_get_authorize_url(**kwargs)
         print("\nPlease go to this URL and login: \n{0}".format(authorize_url))
