@@ -187,3 +187,19 @@ sha1sum --quiet -c *.sha1
 # If you have very fast storage or high latency storage
 ls *.sha1 | parallel sha1sum --quiet -c {} 
 ```
+
+Symlinks
+--------
+
+Be careful when using symlinks. Archivetar will grab the links but not what they
+point to unless you pass `--dereference`  which passes that option to the
+underlying `tar`.  Behavior can be odd so be sure you understand what you are
+doing. Specificaly if you have multiple links pointing to the same file, will
+cause the data to be stored multiple times and the links are replaced with what
+they point to.
+
+The `--size` option does not follow symlinks as that's part of mpifileutils and
+we don't control it. So you may have `--size 1G` and have symlink pointing to a
+100G file will still be added to the tarball as a 'small file' though archivetar
+will respect the size of the object the link points to for `--tar-size` to avoid
+tar's blowing up in size.

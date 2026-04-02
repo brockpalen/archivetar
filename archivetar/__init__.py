@@ -53,24 +53,47 @@ mpirun = "/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.6/bin/mpirun"
 
 
 class DwalkLine:
-    def __init__(self, line=False, relativeto=False, stripcwd=True):
+    def __init__(
+        self, line=False, relativeto=False, stripcwd=True, follow_symlinks=False
+    ):
         """parse dwalk output line"""
         # -rw-r--r-- bennet support 578.000  B Oct 22 2019 09:35 /scratch/support_root/support/bennet/haoransh/DDA_2D_60x70_kulow_1.batch
+        # lrwxrwxrwx brockp support_root  13.000  B Apr  1 2026 16:52 /gpfs/accounts/support_root/support/brockp/box-copy/brockscan
         match = re.match(
-            rb"\S+\s+\S+\s+\S+\s+(\d+\.\d+)\s+(\S+)\s+.+\s(/.+)", line, re.DOTALL
+            rb"(\S+)\s+\S+\s+\S+\s+(\d+\.\d+)\s+(\S+)\s+.+\s(/.+)", line, re.DOTALL
         )  # use re.DOTALL to match newlines in filenames
+
+        perms = match[1]
+        count = float(match[2])
+        units = match[3]
+        path = match[4]
         if relativeto:
             self.relativeto = relativeto
         else:
             self.relativeto = os.getcwd()
 
-        self.size = self._normalizeunits(
-            units=match[2], count=float(match[1])
-        )  # size in bytes
+        size_bytes = self._normalizeunits(units=units, count=count)  # size in bytes
+
+        # if symlink, overwrite with target size
+        self.is_symlink = perms.startswith(b"l")
+        if self.is_symlink and follow_symlinks:
+            try:
+                # os.stat follows symlinks -> target size
+                size_bytes = os.stat(path.rstrip(b"\r\n")).st_size
+            except FileNotFoundError:
+                logging.warning(f"Dangling Link {path!r} points to nothing")
+                pass
+            except PermissionError as e:
+                raise PermissionError(
+                    f"Link {path!r} points to something we cannot read"
+                ) from e
+
+        self.size = size_bytes
+
         if stripcwd:
-            self.path = self._stripcwd(match[3])
+            self.path = self._stripcwd(path)
         else:
-            self.path = match[3]
+            self.path = path
 
     def _normalizeunits(self, units=False, count=False):
         """convert size by SI units to Bytes"""
@@ -106,7 +129,11 @@ class DwalkParser:
             yield pl.path
 
     def tarlist(
-        self, prefix="archivetar", minsize=1e9 * 100, bundle_path=None
+        self,
+        prefix="archivetar",
+        minsize=1e9 * 100,
+        bundle_path=None,
+        follow_symlinks=False,
     ):  # prefix for files
         # min size sum of all files in list
         # bundle_path where should indexes and files be created
@@ -133,7 +160,7 @@ class DwalkParser:
         index = index_p.open("wb")
         tartmp = tartmp_p.open("wb")
         for line in self.path:
-            pl = DwalkLine(line=line)
+            pl = DwalkLine(line=line, follow_symlinks=follow_symlinks)
             sizesum += pl.size
             index.write(line)  # already has newline
             tartmp.write(pl.path)  # already has newline (binary)
@@ -709,6 +736,7 @@ def main(argv):
             prefix=args.prefix,
             minsize=humanfriendly.parse_size(args.tar_size),
             bundle_path=args.bundle_dir,
+            follow_symlinks=args.dereference,
         ):
             logging.info(f"    Index: {index_p}")
             logging.info(f"    tar: {tar_list}")
