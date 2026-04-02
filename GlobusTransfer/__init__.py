@@ -5,7 +5,7 @@ import stat
 from pathlib import Path
 
 import globus_sdk
-from globus_sdk.scopes import GCSCollectionScopeBuilder, TransferScopes
+from globus_sdk.scopes import TransferScopes
 from humanfriendly import format_size
 
 from .exceptions import GlobusFailedTransfer, ScopeOrSingleDomainError
@@ -128,10 +128,6 @@ class GlobusTransfer:
             else:
                 clean = True
 
-        #  attempt to auto activate each endpoint so to not stop later in the flow
-        self.endpoint_autoactivate(self.ep_source)
-        self.endpoint_autoactivate(self.ep_dest)
-
     def _save_tokens(self, tokens):
         """Save Globus auth tokens as required.
 
@@ -151,9 +147,15 @@ class GlobusTransfer:
         """
 
         self.client.oauth2_start_flow(refresh_tokens=True, requested_scopes=scopes)
-        authorize_url = self.client.oauth2_get_authorize_url(
-            session_required_single_domain=self.session_required_single_domain
-        )
+
+        kwargs = {}
+        # only pass session_required_single_domain if it's requested by the collection
+        if self.session_required_single_domain:
+            kwargs[
+                "self.session_required_single_domain"
+            ] = self.self.session_required_single_domain
+
+        authorize_url = self.client.oauth2_get_authorize_url(**kwargs)
         print("\nPlease go to this URL and login: \n{0}".format(authorize_url))
 
         auth_code = input("\nPlease enter the code you get after login here: ").strip()
@@ -197,20 +199,6 @@ class GlobusTransfer:
                 )
                 raise ScopeOrSingleDomainError("adding missing domain")
 
-    def endpoint_autoactivate(self, endpoint, if_expires_in=3600):
-        """Use TransferClient.endpoint_autoactivate() to make sure the endpoint is question is active."""
-        # attempt to auto activate if fail prompt to activate
-        r = self.tc.endpoint_autoactivate(endpoint, if_expires_in=if_expires_in)
-        while r["code"] == "AutoActivationFailed":
-            print(
-                "Endpoint requires manual activation, please open "
-                "the following URL in a browser to activate the "
-                "endpoint:"
-            )
-            print(f"https://app.globus.org/file-manager?origin_id={endpoint}")
-            input("Press ENTER after activating the endpoint:")
-            r = self.tc.endpoint_autoactivate(endpoint, if_expires_in=3600)
-
     def ls_endpoint(self):
         """Just here for debug that globus is working."""
         for entry in self.tc.operation_ls(self.ep_source, path=self.path_source):
@@ -244,7 +232,6 @@ class GlobusTransfer:
             # labels can only be letters, numbers, spaces, dashes, and underscores
             label = label.replace(".", "-")
             self.TransferData = globus_sdk.TransferData(
-                self.tc,
                 self.ep_source,
                 self.ep_dest,
                 verify_checksum=True,
