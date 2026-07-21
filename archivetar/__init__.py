@@ -244,7 +244,7 @@ def globus_transfer_singleton(args, path, label="Globus Singleton"):
         skip_source_errors=args.skip_source_errors,
         preserve_timestamp=args.preserve_timestamp,
     )
-    globus.add_item(Path(path).resolve(), label=f"{label}: {args.prefix}")
+    globus.add_item(Path(path).resolve(), label=f"{label}: {args.prefix}", in_root=True)
     try:
         taskid = globus.submit_pending_transfer()
     except GlobusTransferConflict as e:
