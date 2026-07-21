@@ -35,7 +35,7 @@ from archivetar.archive_args import parse_args
 from archivetar.exceptions import ArchivePrefixConflict, TarError
 from archivetar.unarchivetar import find_prefix_files
 from GlobusTransfer import GlobusTransfer
-from GlobusTransfer.exceptions import GlobusError, GlobusFailedTransfer
+from GlobusTransfer.exceptions import GlobusFailedTransfer, GlobusTransferConflict
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
 
@@ -245,7 +245,11 @@ def globus_transfer_singleton(args, path, label="Globus Singleton"):
         preserve_timestamp=args.preserve_timestamp,
     )
     globus.add_item(Path(path).resolve(), label=f"{label}: {args.prefix}")
-    taskid = globus.submit_pending_transfer()
+    try:
+        taskid = globus.submit_pending_transfer()
+    except GlobusTransferConflict as e:
+        logging.error(e)
+        sys.exit(1)
     logging.info(f"Globus Transfer: {label} taskid: {taskid}")
     return taskid
 
@@ -546,6 +550,10 @@ def process(q, out_q, iolock, args):
                     if checksum_p.is_file():
                         logging.info(f"Deleting {checksum_p}")
                         checksum_p.unlink()
+        except GlobusTransferConflict as e:
+            logging.error(f"conflicting globus transfer of: {tar.filename}")
+            out_q.put((-1, tar.filename, e))
+            raise e
         except GlobusFailedTransfer as e:
             logging.error(f"error with globus transfer of: {tar.filename}")
             out_q.put((-1, tar.filename, e))
@@ -675,7 +683,11 @@ def main(argv):
             logging.debug(f"Adding file {path} to Globus Transfer")
             globus.add_item(path, label=f"Large File List {args.prefix}")
 
-        large_taskid = globus.submit_pending_transfer()
+        try:
+            large_taskid = globus.submit_pending_transfer()
+        except GlobusTransferConflict as e:
+            logging.error(e)
+            sys.exit(1)
         logging.info(f"Globus Transfer of Oversize files: {large_taskid}")
 
     # this may look less efficent to do checksums after transfer,

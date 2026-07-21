@@ -1,7 +1,21 @@
-class GlobusError(BaseException):
+class GlobusError(Exception):
     """Globus base exception class."""
 
     pass
+
+
+class GlobusTransferConflict(GlobusError):
+    """Transfer conflicts with an existing incomplete Globus transfer."""
+
+    def __init__(self, err):
+        self.original = err
+        message = (
+            "Globus refused to submit this transfer because an identical "
+            "source/destination path set has not completed yet. Wait for the "
+            "existing Globus task to finish or cancel it before rerunning "
+            "archivetar."
+        )
+        super().__init__(message)
 
 
 class GlobusFailedTransfer(GlobusError):
