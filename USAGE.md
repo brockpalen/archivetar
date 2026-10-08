@@ -130,8 +130,18 @@ whose data is backed up; filters combine with AND. A file that cannot be read
 or vanishes while the backup runs fails that run, and the next run retries it.
 
 Exit status: 0 success; 3 files exist that no generation has captured (run
-`--full`); anything else means the run failed and the next run retries the
+`--full`); 4 another run of the same backup is still going, so this one did
+nothing; anything else means the run failed and the next run retries the
 same generation.
+
+### Scheduling
+
+Runs can be as frequent as you like (hourly, daily, ...): incrementals compare
+against the exact time of the previous run, not whole days. Only one run of a
+backup happens at a time: each run locks `.archivebackup/<prefix>/lock`, and a
+run that starts while the previous one is still going exits with status 4
+without touching anything, so a scheduled job just skips its turn. The lock is
+released automatically when a run ends or dies, so it never goes stale.
 
 Stamps are back-dated 5 minutes to cover clock differences between this host
 and the storage servers (`AT_BACKUP_STAMP_BACKDATE` seconds to change). A few

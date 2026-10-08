@@ -132,6 +132,7 @@ def test_first_run_is_full(env):
 def test_state_lives_in_tree_and_scratch_holds_only_scratch(env):
     env["run"]()
     assert sorted(p.name for p in env["state"].iterdir()) == [
+        "lock",
         "proj-G0001.backup.json",
         "proj-G0001.catalog.txt.gz",
         "proj-G0001.stamp",
@@ -225,7 +226,7 @@ def test_incremental_prints_warning(env, capsys):
 
 def test_dryrun_records_nothing(env):
     env["run"]("--dryrun")
-    assert list(env["state"].iterdir()) == []
+    assert [p.name for p in env["state"].iterdir()] == ["lock"]
     assert env["mkdir"] == [] and env["uploads"] == []
 
 
@@ -713,3 +714,46 @@ def test_restore_replaces_symlink_instead_of_writing_through(staged, tmp_path):
     assert victim.read_text() == "keep me"
     assert (target / "data" / "big.dat").read_text() == "v2"
     assert not (target / "data" / "big.dat").is_symlink()
+
+
+def test_concurrent_run_is_refused(env, capsys):
+    """A second run while one holds the lock must not touch anything."""
+    import subprocess
+    import sys
+
+    env["run"]()
+    lock = env["state"] / "lock"
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import fcntl, os, sys, time\n"
+            f"fd = os.open({str(lock)!r}, os.O_RDWR)\n"
+            "fcntl.lockf(fd, fcntl.LOCK_EX)\n"
+            "os.pwrite(fd, b'host other pid 42', 0)\n"
+            "print('locked', flush=True)\n"
+            "time.sleep(30)\n",
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert holder.stdout.readline().strip() == "locked"
+        before = sorted(p.name for p in env["state"].iterdir())
+        with pytest.raises(SystemExit) as e:
+            env["run"]()
+        assert e.value.code == backup.EXIT_LOCKED
+        assert "host other pid 42" in capsys.readouterr().err
+        assert sorted(p.name for p in env["state"].iterdir()) == before
+        assert len(env["archivetar"]) == 1  # the second run archived nothing
+    finally:
+        holder.kill()
+        holder.wait()
+
+    env["run"]()  # lock released when the holder died
+    assert meta(env, 2)["type"] == "incremental"
+
+
+def test_lock_records_who_holds_it(env):
+    env["run"]()
+    assert (env["state"] / "lock").read_text().startswith("host ")

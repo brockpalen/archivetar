@@ -27,12 +27,14 @@ archivebackup lists it and exits with status 3 so the user runs a new full.
 
 import argparse
 import datetime
+import fcntl
 import gzip
 import json
 import logging
 import os
 import re
 import shutil
+import socket
 import subprocess  # nosec
 import sys
 import tempfile
@@ -53,6 +55,8 @@ STAMP_BACKDATE = max(0, archivetar.env.int("AT_BACKUP_STAMP_BACKDATE", 300))
 
 # exit status when files exist that no generation has archived
 EXIT_UNCAPTURED = 3
+# exit status when another run of the same backup is still going
+EXIT_LOCKED = 4
 
 REFUSED_OPTIONS = {
     "list": "archivebackup builds its own file list",
@@ -107,6 +111,7 @@ BACKUP_EPILOG = (
     + """
 
 exit status: 0 ok, 3 files exist that no generation has captured (run --full),
+4 another run of this backup is still going (this run did nothing),
 anything else: the run failed and is retried as the same generation next time
 """
     + INCREMENTAL_WARNING
@@ -423,6 +428,39 @@ def generation_destination(aargs, prefix):
     return ["--destination-dir", aargs.destination_dir, "--wait"]  # last wins
 
 
+def acquire_lock(state_dir, prefix):
+    """Make sure only one run of this backup happens at a time.
+
+    Takes an exclusive POSIX lock on .archivebackup/<prefix>/lock, which
+    works across nodes on GPFS and NFSv4.  If another run holds it, exit with
+    EXIT_LOCKED without touching anything, so a scheduled run simply skips
+    its turn.  The lock is released when the process exits, even if it
+    crashes, so it can never go stale.  Returns the open descriptor, which
+    must stay open for the whole run.
+    """
+    path = Path(state_dir) / "lock"
+    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        holder = os.pread(fd, 200, 0).decode(errors="replace").strip()
+        os.close(fd)
+        print(
+            f"archivebackup: another run of {prefix} is still going "
+            f"({holder or 'unknown'}); not starting",
+            file=sys.stderr,
+        )
+        sys.exit(EXIT_LOCKED)
+    os.ftruncate(fd, 0)
+    started = datetime.datetime.now().isoformat(timespec="seconds")
+    os.pwrite(
+        fd,
+        f"host {socket.gethostname()} pid {os.getpid()} since {started}\n".encode(),
+        0,
+    )
+    return fd
+
+
 def private_work_dir(scratch, prefix):
     """A 0700 directory of our own inside --bundle-dir for all temporary files.
 
@@ -712,6 +750,15 @@ def backup_main(argv):
 
     state_dir = state_dir_for(bargs.prefix)
     state_dir.mkdir(parents=True, exist_ok=True)
+    lock = acquire_lock(state_dir, bargs.prefix)
+    try:
+        run_backup(bargs, aargs, passthrough, state_dir)
+    finally:
+        os.close(lock)  # releases the lock
+
+
+def run_backup(bargs, aargs, passthrough, state_dir):
+    """One backup run; the caller holds the lock."""
     work = private_work_dir(aargs.bundle_dir, bargs.prefix)
     # archivetar's own walk caches and lists go to the temp dir; keep them in
     # our private directory too
