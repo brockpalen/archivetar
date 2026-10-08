@@ -835,7 +835,8 @@ def main(argv):
         # large_taskid only esists if --size given to create a large file option
         # this will break once we have 1EB files
         if (args.wait or args.checksum) and large_taskid:
-            if args.force_local_checksum:
+            # the local checksum manifest is only uploaded when checksums are on
+            if args.checksum and args.force_local_checksum:
                 logging.debug("Wait for large_checksum_taskid to finish")
                 globus.task_wait(large_checksum_taskid)
 
