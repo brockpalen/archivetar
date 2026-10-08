@@ -1,6 +1,10 @@
 from subprocess import check_output
 
+import freezegun
 import pytest
+
+# prevent freezegun from tripping globus_sdk lazy loading of orjson which is unused,
+freezegun.configure(extend_ignore_list=["globus_sdk"])
 
 
 def pytest_addoption(parser):
