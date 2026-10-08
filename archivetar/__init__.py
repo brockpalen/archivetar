@@ -59,8 +59,11 @@ class DwalkLine:
         """parse dwalk output line"""
         # -rw-r--r-- bennet support 578.000  B Oct 22 2019 09:35 /scratch/support_root/support/bennet/haoransh/DDA_2D_60x70_kulow_1.batch
         # lrwxrwxrwx brockp support_root  13.000  B Apr  1 2026 16:52 /gpfs/accounts/support_root/support/brockp/box-copy/brockscan
+        # The path is the first " /" after the size units: nothing before it
+        # (user, group, date) contains "/", but the path itself may, e.g. a
+        # directory ending in a space ("dir /file").  So match the date lazily.
         match = re.match(
-            rb"(\S+)\s+\S+\s+\S+\s+(\d+\.\d+)\s+(\S+)\s+.+\s(/.+)", line, re.DOTALL
+            rb"(\S+)\s+\S+\s+\S+\s+(\d+\.\d+)\s+(\S+)\s+.*?\s(/.+)", line, re.DOTALL
         )  # use re.DOTALL to match newlines in filenames
 
         perms = match[1]
