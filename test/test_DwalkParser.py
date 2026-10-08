@@ -81,7 +81,7 @@ def test_DwalkLine(monkeypatch):
     monkeypatch.setattr(os, "getcwd", mock_os_getcwd)
 
     line = DwalkLine(line=s)
-    assert line.size == 1.220 * 1e9
+    assert line.size == 1.220 * 1024**3
     assert line.path == b"mmiranda/ouser/dmontiel/mg1/lib/libdeal_II.g.so"
     yield line
 
@@ -92,7 +92,7 @@ def test_DwalkLine(monkeypatch):
         (
             b"-rwxr-xr-x mmiranda support   1.220 GB Mar  4 2020 15:58 /scratch/support_root/support/mmiranda/ouser/dmontiel/mg1/lib/libdeal_II.g.so",
             b"mmiranda/ouser/dmontiel/mg1/lib/libdeal_II.g.so",
-            1.220 * 1e9,
+            1.220 * 1024**3,
         ),
         (
             b"-rw-r--r-- joegrego okoues_root 875.000  B Jul 15 2020 12:55 /scratch/support_root/support/joegrego/CoreSequence/Data/0-9999/9000-9999/9800-9899/9810-9819/9814_Jm_2004-11-05_1/.AppleDouble/Icon\n",
@@ -119,13 +119,21 @@ def test_DwalkLine_parse(monkeypatch, line, result, size):
     "kwargs,result,expex",
     [
         ({"units": b"B", "count": 909}, 909, does_not_raise()),
-        ({"units": b"KB", "count": 1}, 1000, does_not_raise()),
-        ({"units": b"MB", "count": 1}, 1000000, does_not_raise()),
-        ({"units": b"GB", "count": 1}, 1e9, does_not_raise()),
-        ({"units": b"TB", "count": 1}, 1e12, does_not_raise()),
-        ({"units": b"KB", "count": 321.310}, 321310, does_not_raise()),  # fractional
+        ({"units": b"KB", "count": 1}, 1024, does_not_raise()),
+        ({"units": b"MB", "count": 1}, 1024**2, does_not_raise()),
+        ({"units": b"GB", "count": 1}, 1024**3, does_not_raise()),
+        ({"units": b"TB", "count": 1}, 1024**4, does_not_raise()),
         (
-            {"units": "mB", "count": 1},
+            {"units": b"KB", "count": 321.310},
+            pytest.approx(321.310 * 1024),
+            does_not_raise(),
+        ),  # fractional
+        # new IEC spellings from current dwalk
+        ({"units": b"KiB", "count": 1}, 1024, does_not_raise()),
+        ({"units": b"GiB", "count": 1}, 1024**3, does_not_raise()),
+        ({"units": b"TiB", "count": 1}, 1024**4, does_not_raise()),
+        (
+            {"units": b"mB", "count": 1},
             1000000,
             pytest.raises(BaseException),
         ),  # case maters

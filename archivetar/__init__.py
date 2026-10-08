@@ -48,8 +48,8 @@ env = Env()
 
 # defaults used for development
 # overridden with AT_MPIRUN and AT_MPIFILEUTILS
-fileutils = "/sw/pkgs/arc/archivetar/0.17.0/install"
-mpirun = "/sw/pkgs/arc/stacks/gcc/10.3.0/openmpi/4.1.6/bin/mpirun"
+fileutils = "/home/brockp/mpifileutils/install/"
+mpirun = "/sw/pkgs/arc/stacks/gcc/15.1.0/openmpi/5.0.10/bin/mpirun"
 
 
 class DwalkLine:
@@ -96,14 +96,36 @@ class DwalkLine:
             self.path = path
 
     def _normalizeunits(self, units=False, count=False):
-        """convert size by SI units to Bytes"""
+        """convert dwalk size units to Bytes.
+
+        mpifileutils/dwalk uses binary (1024-based) math for its size
+        output.  Newer versions label these correctly with IEC units
+        (KiB, MiB, ...).  Older versions mislabeled the same 1024-based
+        values as SI units (KB, MB, ...).  Accept both spellings and
+        always treat them as powers of 1024.
+        """
         units = units.decode()  # convert binary data to string type
-        # SI powers, e.g., 1 KB = 10**3 bytes
-        SI_powers = dict(B=0, KB=3, MB=6, GB=9, TB=12, PB=15)
+        # power of 1024 for each unit; the IEC spelling and the legacy
+        # (mislabeled) SI spelling map to the same binary power.
+        binary_powers = {
+            "B": 0,
+            "KiB": 1,
+            "KB": 1,
+            "MiB": 2,
+            "MB": 2,
+            "GiB": 3,
+            "GB": 3,
+            "TiB": 4,
+            "TB": 4,
+            "PiB": 5,
+            "PB": 5,
+            "EiB": 6,
+            "EB": 6,
+        }
         try:
-            num_bytes = count * 10 ** SI_powers[units]
-        except KeyError as ex:
-            raise Exception(f"{units} is not a known SI unit")
+            num_bytes = count * 1024 ** binary_powers[units]
+        except KeyError:
+            raise Exception(f"{units} is not a known size unit")
         return num_bytes
 
     def _stripcwd(self, path):
