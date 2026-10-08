@@ -31,6 +31,8 @@ Building archivetar
  * `pipenv run pyinstaller bin/archivepurge -p . --onefile`   # create executable no need for pipenv
  * `pipenv run pyinstaller bin/unarchivetar -p . --onefile`   # create executable no need for pipenv
  * `pipenv run pyinstaller bin/archivescan -p . --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller bin/archivebackup --collect-all globus_sdk -p . --onefile`   # create executable no need for pipenv
+ * `pipenv run pyinstaller bin/archiverestore -p . --onefile`   # create executable no need for pipenv
 
 
 #### Install using PIP

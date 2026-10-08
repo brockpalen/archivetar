@@ -1,4 +1,4 @@
-Using Archivetar / Archivepurge / Unarchivetar
+Using Archivetar / Archivepurge / Unarchivetar / Archivebackup
 ==============================================
 
 Quick Start
@@ -23,6 +23,9 @@ archivetar --prefix myarchive --size 20G --tar-size 10G
 
 ```
  unarchivetar --prefix project1
+
+ # tars somewhere else, extract into the current directory
+ unarchivetar --prefix project1 --archive-dir /scratch/me/tars
 ```
 
 ### Upload via Globus to Archive
@@ -58,30 +61,143 @@ archivetar --prefix project1 --bundle-path /tmp/
 Backups with Archivetar
 -----------------------
 
-*NOTE* archivetar is not meant to be a backup tool, but can fake it when used
-carefully.  By using the filtering options `--atime` `--mtime` `--ctime`
-`archivetar` can select only files matching the filters specifically files that
-were changed.  Incorrectly using settings can cause gaps resulting in data loss.
-We recommend repeating a full copy periodically to correct for any missing data.
+*NOTE* archivetar is not a backup system. `archivebackup` and `archiverestore`
+make simple full + incremental copies to a Globus archive easy, but read the
+limitations below before relying on them.
 
-Work-flow, grab all files modified sense last run of `archivetar` and placing
-them in their own folder. 
+`archivebackup` does the timestamp bookkeeping for you. Every run is a
+*generation* named `<prefix>-G0001`, `<prefix>-G0002`, ...
 
-Limitations, `archivetar` cannot track deletion of files. For users not using
-Globus (`--destination-path`) setting a size cutoff `--size` you can not tell
-what files larger than `--size` need to be copied. If using Globus those large
-files and the tars created are uploaded.
+ * The first run (or any run with `--full`) archives everything.
+ * Later runs archive only files whose ctime changed since the previous run.
+ * Each generation is uploaded to its own folder on the destination, like
+   rdiff-backup increments, so nothing from an earlier generation is ever
+   overwritten:
 
 ```
-# initial full backup
-archivetar --prefix full-backup --source <UUID> --destination <UUID>
---destination-path /path/on/dest/project/full/  
-
-# 7 day later grab all files changed (ctime) less than 8 days ago (small overlap
-# recommended)
-archivetar --prefix inc-backup-7day --source <UUID> --destination <UUID>
---destination-path /path/on/dest/project/inc-7day/ --ctime -8
+/archive/project1/project1-G0001/   tars, files over --size, metadata
+/archive/project1/project1-G0002/   ...
 ```
+
+Run it from the top of the directory to back up, like `archivetar`, always with
+the same `--prefix`. Globus is required. All other `archivetar` options
+(`--tar-size`, `--size`, compression, `--checksum`, `--rm-at-files`, ...) are
+passed through.
+
+```
+# first run is a full, later runs only archive what changed
+archivebackup --prefix project1 --bundle-dir /tmp/project1 \
+  --source <UUID> --destination <UUID> --destination-path /archive/project1/ \
+  --size 100G --tar-size 100G --zstd
+
+# force a new full, or do one automatically after every 10 incrementals
+archivebackup ... --full
+archivebackup ... --full-every 10
+```
+
+`--size` is safe here: files over `--size` are sent as-is into that
+generation's folder under their original path, so every version is kept.
+
+### Where things live
+
+ * **The destination is the backup.** Each generation's folder holds its tars,
+   its files over `--size`, `<prefix>-G####.backup.json` (metadata),
+   `<prefix>-G####.fullindex.txt` (a listing of every file as the tree looked
+   at that moment) and `<prefix>-G####.catalog.txt.gz` (see below). A restore
+   needs nothing else, so you can rebuild after losing the source entirely.
+ * **`.archivebackup/<prefix>/` in the directory being backed up** holds the
+   small state the next run needs (latest metadata, stamp and catalog). It is
+   backed up along with everything else. If it is lost, the next run sees the
+   generations already on the destination and starts a new full under the next
+   number; a generation number is never reused.
+ * **`--bundle-dir` is scratch**, exactly as for `archivetar`: tars and lists are
+   built there before upload. It must be outside the directory being backed up
+   and can be wiped between runs; `--rm-at-files` cleans it as uploads finish.
+
+`archivebackup` always adds `--wait`: a generation only counts once Globus
+confirms every tar and large file, and then its metadata, fullindex and catalog
+are uploaded and confirmed too.
+
+Not allowed: `--remove-files`, `--list`, and `--atime` / `--mtime` / `--ctime`
+(files outside the filter would never be backed up). `--user` and `--group`
+are fine for choosing whose data is backed up; filters combine with AND.
+
+Stamps are back-dated 5 minutes to cover clock differences between this host
+and the storage servers (`AT_BACKUP_STAMP_BACKDATE` seconds to change). A few
+files may be archived twice; none are skipped.
+
+### What incrementals capture
+
+Incrementals archive files whose ctime changed since the last run. That
+includes everything written, copied, `scp`'d, `rsync`'d (even `rsync -a` /
+`cp -p`, which keep the old mtime: the ctime is always new) or `mv`'d in from
+another filesystem. Adding a new genome run or new scans just works.
+
+**What they do not capture:**
+
+ * **Directories renamed, or moved in with `mv` from elsewhere on the same
+   filesystem.** A rename does not change the ctime of the files inside it.
+ * **Deletions.** Deleted files reappear in a restore.
+
+**The catalog check.** So nobody finds out at restore time, the catalog lists
+every file path (with its size and mtime) archived since the last full. After
+each incremental, anything on disk that the catalog does not cover is either
+*NEW* (renamed / moved in with `mv`) or *CHANGED* (replaced by a different file
+moved in with `mv`). If there are any, `archivebackup` still records the
+generation, then prints an ERROR, lists them in
+`.archivebackup/<prefix>/<prefix>-G####.uncaptured.txt` and **exits with status
+3**. It keeps doing so on every run until you run a new full with `--full`.
+
+The catalog is gzip compressed, roughly 10-20MB per million files. The check
+compares size and mtime as dwalk prints them (3 significant digits, to the
+minute), so a replacement of the same name, nearly the same size and the same
+minute moved in with `mv` can still slip past. Paths containing newlines are
+not supported.
+
+### New fulls, failures and cleanup
+
+A new full is just the next generation number in its own folder; it never
+overwrites or deletes an earlier one, so the previous chain stays complete
+while the new full runs, like rotating tape sets.
+
+If a run fails (tar error, Globus failure, killed job), that generation is not
+recorded and restores use the previous ones. The next run notices, removes the
+partial local files, and retries the same generation number; an interrupted
+full is retried as a full. The partial folder on the destination is
+overwritten by the retry.
+
+`archivebackup` never deletes backups. With `--keep-fulls N` it lists, after a
+successful run, the destination folders of generations older than the newest N
+fulls, which can be deleted:
+
+```
+archivebackup ... --keep-fulls 2
+```
+
+### Restoring
+
+Copy the backup's folder back from the archive (the whole `/archive/project1/`
+with its per-generation folders), then run `archiverestore` from an **empty**
+directory to restore into, pointing `--from` at the copy. It extracts the most
+recent full and then each incremental after it, in order, so the newest version
+of each file wins. Files over `--size` are copied in right after their
+generation's tars, so they are always the right version too.
+
+```
+mkdir /scratch/me/project1-restored && cd /scratch/me/project1-restored
+archiverestore --prefix project1 --from /scratch/me/staging --list-generations
+archiverestore --prefix project1 --from /scratch/me/staging                 # latest
+archiverestore --prefix project1 --from /scratch/me/staging --generation 7  # as of G7
+```
+
+`unarchivetar` options such as `--tar-processes` and `--folder` are passed
+through. `--keep-old-files`, `--skip-old-files` and `--keep-newer-files` are
+refused, because they would stop a later generation replacing a file an
+earlier one just restored.
+
+Files deleted after the full come back, and renamed directories appear at the
+location they had in the full. Use the `*.fullindex.txt` of the generation you
+restored to see where everything was at the time.
 
 Archiving Specific Files (Filters)
 ----------------------------------

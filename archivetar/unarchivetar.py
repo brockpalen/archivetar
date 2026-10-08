@@ -40,6 +40,12 @@ def parse_args(args):
     )
 
     parser.add_argument(
+        "--archive-dir",
+        help="Directory holding the tars (default: current directory). Files are always extracted into the current directory.",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
         "--folder",
         help="Extract/Search only the given folder similar to tar -xf a.tar folder/sub",
         type=str,
@@ -156,7 +162,9 @@ def main(argv):
         if not args.folder:
             print("Selecting archives without --folder which is required")
             sys.exit(1)
-        file_lists = find_prefix_files(args.prefix, suffix="DONT_DELETE")
+        file_lists = find_prefix_files(
+            args.prefix, path=args.archive_dir, suffix="DONT_DELETE"
+        )
         logging.info(f"Found {len(file_lists)} file lists with prefix {args.prefix}")
 
         matches = set()
@@ -178,7 +186,7 @@ def main(argv):
         sys.exit(0)
 
     # find all archives for prefix
-    archives = find_prefix_files(args.prefix)
+    archives = find_prefix_files(args.prefix, path=args.archive_dir)
     logging.info(f"Found {len(archives)} archives with prefix {args.prefix}")
 
     # start parallel pool
