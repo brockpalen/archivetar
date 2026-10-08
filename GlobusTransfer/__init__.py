@@ -17,6 +17,29 @@ from .exceptions import (
 logging.getLogger(__name__).addHandler(logging.NullHandler)
 
 
+def check_token_file(path):
+    """Make sure the token file is user-only (600), fixing it if needed.
+
+    Older archivetar versions wrote it with the user's umask (often 664 on
+    HPC systems), so tighten it with a warning rather than refusing to run.
+    Raises FileNotFoundError if it does not exist (caller starts a new login).
+    """
+    st = os.stat(path)
+    if st.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+        logging.warning(
+            f"Permissions {stat.filemode(st.st_mode)} for {path} were too open, "
+            "changed to -rw-------"
+        )
+        os.chmod(path, 0o600)
+
+
+def write_token_file(path, tokens):
+    """Write tokens as JSON readable only by the owner (600)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(tokens, f)
+
+
 class GlobusTransfer:
     """
     object of where / how to transfer data
@@ -62,9 +85,10 @@ class GlobusTransfer:
         """
         Get globus tokens data.
 
-        Check if  ~/.globus exists else create
-        If it exists check permissions are user only
-        If overly permissive bail
+        Create ~/.globus (700) if missing.  The directory may be shared with
+        other tools (e.g. the Globus CLI creates it 775), so its permissions
+        are not enforced; the token file itself must be user-only (600),
+        the same rule ssh applies to private keys.  See issue #49.
         Try to load tokens
         Else start authorization
         """
@@ -77,16 +101,15 @@ class GlobusTransfer:
 
         if save_path.is_dir():  # exists and directory
             st = os.stat(save_path)
-            logging.debug(f"{str(save_path)} exists permissions {st.st_mode}")
-            if bool(st.st_mode & stat.S_IRWXO):
-                raise Exception("~/.globus is world readable and to permissive set 700")
-            if bool(st.st_mode & stat.S_IRWXG):
-                raise Exception("~/.globus is group readable and to permissive set 700")
+            logging.debug(
+                f"{str(save_path)} exists permissions {stat.filemode(st.st_mode)}"
+            )
         else:  # create ~/.globus
             logging.debug(f"Creating {str(save_path)}")
             save_path.mkdir(mode=0o700)
 
         try:  # try and read tokens from file else create and save
+            check_token_file(self.token_file)
             with self.token_file.open() as f:
                 tokens = json.load(f)
 
@@ -143,9 +166,8 @@ class GlobusTransfer:
 
         # we only want transfer tokens
         tokens = tokens.by_resource_server["transfer.api.globus.org"]
-        with self.token_file.open("w") as f:
-            logging.debug("Saving tokens to {str(token_file)}")
-            json.dump(tokens, f)
+        logging.debug(f"Saving tokens to {str(self.token_file)}")
+        write_token_file(self.token_file, tokens)
 
     def do_native_app_authentication(
         self, scopes=TransferScopes.all, session_required_single_domain=None
