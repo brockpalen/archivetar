@@ -99,6 +99,16 @@ def test_DwalkLine(monkeypatch):
             b"joegrego/CoreSequence/Data/0-9999/9000-9999/9800-9899/9810-9819/9814_Jm_2004-11-05_1/.AppleDouble/Icon\n",
             875,
         ),
+        (  # directory name ending in a space: "NRM /"
+            b"-rw-r--r-- brockp support   2.000 GiB Mar  4 2020 15:58 /scratch/support_root/support/wgs/NRM /1_NRM.bam\n",
+            b"wgs/NRM /1_NRM.bam\n",
+            2 * 1024**3,
+        ),
+        (  # several " /" in the path; only the first one starts it
+            b"-rw-r--r-- brockp support  10.000  B Mar 14 2020 15:58 /scratch/support_root/support/a /b /c.txt\n",
+            b"a /b /c.txt\n",
+            10,
+        ),
     ],
 )
 def test_DwalkLine_parse(monkeypatch, line, result, size):
