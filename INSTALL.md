@@ -20,6 +20,7 @@ Building archivetar
 ### Requirements
 
  * Patched [mpiFileUtils](https://github.com/brockpalen/mpifileutils) `build.sh` is a shortcut and builds the matching version
+   * archivetar >= v1.1.x requires [v0.12.1-brockp](https://github.com/brockpalen/mpifileutils/releases/tag/v0.12.1-brockp)
    * archivetar <= v1.0.x requires [v0.10.2-brockp](https://github.com/brockpalen/mpifileutils/releases/tag/v0.10.2-brockp)
    * Override the version `build.sh` uses with `MFU_VERSION=<tag> ./build.sh`
  * python3.6+
