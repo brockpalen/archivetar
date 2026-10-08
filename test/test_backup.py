@@ -7,6 +7,8 @@ generation, stamp, catalog and restore-chain logic.
 import gzip
 import json
 import os
+import stat
+import tempfile
 import time
 from contextlib import ExitStack as does_not_raise
 
@@ -40,6 +42,7 @@ def env(tmp_path, monkeypatch):
         "src": src,
         "bundle": bundle,
         "state": src / ".archivebackup" / "proj",
+        "work": bundle / "archivebackup-proj",
         "archivetar": [],
         "filter": [],
         "mkdir": [],
@@ -77,6 +80,8 @@ def env(tmp_path, monkeypatch):
         n = int(aargs.destination_dir.rsplit("-G", 1)[1])
         env["uploads"].append((n, [p.name for p in paths]))
 
+    # backup_main points tempfile at its private work dir; undo after the test
+    monkeypatch.setattr(tempfile, "tempdir", tempfile.tempdir)
     monkeypatch.setattr(backup, "walk_full", walk_full)
     monkeypatch.setattr(
         backup, "write_fullindex", lambda c, out: write_listing(out, env["tree"])
@@ -131,7 +136,7 @@ def test_state_lives_in_tree_and_scratch_holds_only_scratch(env):
         "proj-G0001.catalog.txt.gz",
         "proj-G0001.stamp",
     ]
-    assert (env["bundle"] / "proj-G0001.fullindex.txt").exists()
+    assert (env["work"] / "proj-G0001.fullindex.txt").exists()
 
 
 def test_metadata_catalog_and_fullindex_uploaded_to_generation_folder(env):
@@ -162,9 +167,10 @@ def test_second_run_is_incremental_against_previous_stamp(env):
 
 
 def test_scratch_can_be_wiped_between_runs(env):
+    import shutil
+
     env["run"]()
-    for p in env["bundle"].iterdir():
-        p.unlink()
+    shutil.rmtree(env["bundle"])
     env["run"]()
     assert meta(env, 2)["type"] == "incremental"
 
@@ -251,7 +257,7 @@ def test_interrupted_full_is_retried_as_full(env, monkeypatch):
 
     def boom(argv):
         # archivetar dies after writing a partial tar to scratch
-        (env["bundle"] / "proj-G0002-1.tar").write_text("partial")
+        (env["work"] / "proj-G0002-1.tar").write_text("partial")
         raise RuntimeError("tar failed")
 
     monkeypatch.setattr(backup, "run_archivetar", boom)
@@ -263,7 +269,7 @@ def test_interrupted_full_is_retried_as_full(env, monkeypatch):
     monkeypatch.setattr(backup, "run_archivetar", lambda argv: 0)
     env["run"]()
     assert meta(env, 2)["type"] == "full"
-    assert not (env["bundle"] / "proj-G0002-1.tar").exists()
+    assert not (env["work"] / "proj-G0002-1.tar").exists()
     assert not (env["state"] / "proj-G0002.pending.json").exists()
 
 
@@ -419,6 +425,13 @@ def test_index_entries_handles_spaces_and_symlinks(tmp_path, monkeypatch):
         (["--atime", "-7"], "--atime is not allowed"),
         (["--mtime", "-7"], "--mtime is not allowed"),
         (["--ctime", "-7"], "--ctime is not allowed"),
+        (["--save-list"], "--save-list is not allowed"),
+        (["--save-purge-list"], "--save-purge-list is not allowed"),
+        (["--dereference"], "--dereference is not allowed"),
+        (["--ignore-failed-read"], "--ignore-failed-read is not allowed"),
+        (["--skip-source-errors"], "--skip-source-errors is not allowed"),
+        (["--tar-options=--exclude=*.bam"], "may not exclude"),
+        (["--tar-options", "--sparse -X skip.txt"], "may not exclude"),
     ],
 )
 def test_rejected_options(env, argv, message):
@@ -604,3 +617,99 @@ def test_restore_refuses_when_tars_missing(staged):
     (staging / "proj-G0002" / "proj-G0002-1.tar").unlink()
     with pytest.raises(SystemExit, match="no tars found"):
         backup.restore_main(["archiverestore", "-p", "proj", "--from", str(staging)])
+
+
+@pytest.mark.parametrize(
+    "prefix", ["../evil", "a/b", "_x", ".hidden", "proj*", "", "a b"]
+)
+def test_bad_prefix_rejected(env, prefix):
+    with pytest.raises(SystemExit, match="may only contain"):
+        backup.backup_main(
+            ["archivebackup", "--prefix", prefix, "--bundle-dir", str(env["bundle"])]
+            + GLOBUS
+        )
+
+
+def test_tar_options_without_excludes_allowed(env):
+    env["run"]("--tar-options", "--sparse --xattrs")
+    assert meta(env, 1)["type"] == "full"
+
+
+def test_work_dir_is_private_and_used_for_tars(env):
+    env["run"]()
+    assert stat.S_IMODE(os.stat(env["work"]).st_mode) == 0o700
+    argv = env["archivetar"][0]
+    # our private dir overrides the --bundle-dir the user gave archivetar
+    bundle_args = [argv[i + 1] for i, a in enumerate(argv) if a == "--bundle-dir"]
+    assert bundle_args[-1] == str(env["work"])
+
+
+def test_work_dir_must_be_ours(env, tmp_path):
+    env["bundle"].mkdir()
+    (env["bundle"] / "archivebackup-proj").symlink_to(tmp_path)
+    with pytest.raises(SystemExit, match="not a directory owned by you"):
+        env["run"]()
+
+
+def test_temporary_files_removed(env):
+    env["run"]()
+    (env["work"] / "proj-G0002-2026-10-08-00-00-00.cache").write_text("walk")
+    env["run"]()
+    leftovers = sorted(p.name for p in env["work"].iterdir())
+    assert leftovers == ["proj-G0001.fullindex.txt", "proj-G0002.fullindex.txt"]
+
+
+def test_dryrun_keeps_interrupted_run_intact(env, monkeypatch):
+    env["run"]()
+
+    def boom(argv):
+        (env["work"] / "proj-G0002-1.tar").write_text("partial")
+        raise RuntimeError("tar failed")
+
+    monkeypatch.setattr(backup, "run_archivetar", boom)
+    with pytest.raises(RuntimeError):
+        env["run"]("--full")
+
+    monkeypatch.setattr(backup, "run_archivetar", lambda argv: 0)
+    env["run"]("--dryrun")
+    # still knows G0002 was meant to be a full
+    assert (env["state"] / "proj-G0002.pending.json").exists()
+    env["run"]()
+    assert meta(env, 2)["type"] == "full"
+
+
+def test_make_destination_dir_creates_parent_first(monkeypatch):
+    made = []
+
+    class TC:
+        def operation_mkdir(self, ep, path):
+            made.append(path)
+
+    class Client:
+        tc = TC()
+
+    monkeypatch.setattr(backup, "globus_client", lambda aargs: Client())
+    aargs = type("A", (), {"destination": "DST"})()
+    backup.make_destination_dir(aargs, "/bk/proj/proj-G0001")
+    assert made == ["/bk/proj", "/bk/proj/proj-G0001"]
+
+
+def test_restore_which_archive_copies_nothing(staged):
+    staging, target, calls = staged
+    backup.restore_main(
+        ["archiverestore", "-p", "proj", "--from", str(staging)]
+        + ["--which-archive", "--folder", "data"]
+    )
+    assert list(target.iterdir()) == []
+
+
+def test_restore_replaces_symlink_instead_of_writing_through(staged, tmp_path):
+    staging, target, calls = staged
+    victim = tmp_path / "victim"
+    victim.write_text("keep me")
+    (target / "data").mkdir()
+    (target / "data" / "big.dat").symlink_to(victim)
+    backup.restore_main(["archiverestore", "-p", "proj", "--from", str(staging)])
+    assert victim.read_text() == "keep me"
+    assert (target / "data" / "big.dat").read_text() == "v2"
+    assert not (target / "data" / "big.dat").is_symlink()

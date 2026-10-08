@@ -110,17 +110,28 @@ generation's folder under their original path, so every version is kept.
    backed up along with everything else. If it is lost, the next run sees the
    generations already on the destination and starts a new full under the next
    number; a generation number is never reused.
- * **`--bundle-dir` is scratch**, exactly as for `archivetar`: tars and lists are
-   built there before upload. It must be outside the directory being backed up
-   and can be wiped between runs; `--rm-at-files` cleans it as uploads finish.
+ * **`--bundle-dir` is scratch**: tars and lists are built in a private (0700)
+   `archivebackup-<prefix>/` directory inside it, so a shared space like `/tmp`
+   is fine. It must be outside the directory being backed up and can be wiped
+   between runs; `--rm-at-files` removes tars as their uploads finish.
 
 `archivebackup` always adds `--wait`: a generation only counts once Globus
 confirms every tar and large file, and then its metadata, fullindex and catalog
 are uploaded and confirmed too.
 
-Not allowed: `--remove-files`, `--list`, and `--atime` / `--mtime` / `--ctime`
-(files outside the filter would never be backed up). `--user` and `--group`
-are fine for choosing whose data is backed up; filters combine with AND.
+`--prefix` may only contain letters, digits, `.`, `_` and `-`.
+
+Refused, because they would delete data or make the backup silently
+incomplete while recording files as backed up: `--list`, `--save-list`,
+`--remove-files`, `--save-purge-list`, `--atime` / `--mtime` / `--ctime`,
+`--dereference`, `--ignore-failed-read`, `--skip-source-errors`, and
+`--tar-options` that exclude files. `--user` and `--group` are fine for choosing
+whose data is backed up; filters combine with AND. A file that cannot be read
+or vanishes while the backup runs fails that run, and the next run retries it.
+
+Exit status: 0 success; 3 files exist that no generation has captured (run
+`--full`); anything else means the run failed and the next run retries the
+same generation.
 
 Stamps are back-dated 5 minutes to cover clock differences between this host
 and the storage servers (`AT_BACKUP_STAMP_BACKDATE` seconds to change). A few
@@ -190,8 +201,8 @@ archiverestore --prefix project1 --from /scratch/me/staging                 # la
 archiverestore --prefix project1 --from /scratch/me/staging --generation 7  # as of G7
 ```
 
-`unarchivetar` options such as `--tar-processes` and `--folder` are passed
-through. `--keep-old-files`, `--skip-old-files` and `--keep-newer-files` are
+`unarchivetar` options such as `--tar-processes`, `--folder` and
+`--which-archive` are passed through. `--keep-old-files`, `--skip-old-files` and `--keep-newer-files` are
 refused, because they would stop a later generation replacing a file an
 earlier one just restored.
 

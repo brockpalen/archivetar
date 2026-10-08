@@ -41,7 +41,8 @@ def parse_args(args):
 
     parser.add_argument(
         "--archive-dir",
-        help="Directory holding the tars (default: current directory). Files are always extracted into the current directory.",
+        help="Directory holding the tars (default: current directory). "
+        "Files are always extracted into the current directory.",
         type=str,
         default=None,
     )

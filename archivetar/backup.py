@@ -36,6 +36,7 @@ import shutil
 import subprocess  # nosec
 import sys
 import tempfile
+import textwrap
 import time
 from pathlib import Path, PurePosixPath
 
@@ -48,10 +49,23 @@ from mpiFileUtils import DWalk
 # seconds to back-date each stamp to cover clock skew between this host and
 # the storage servers that set file ctimes.  Overlap only re-archives a few
 # files, it never misses any.
-STAMP_BACKDATE = archivetar.env.int("AT_BACKUP_STAMP_BACKDATE", 300)
+STAMP_BACKDATE = max(0, archivetar.env.int("AT_BACKUP_STAMP_BACKDATE", 300))
 
 # exit status when files exist that no generation has archived
 EXIT_UNCAPTURED = 3
+
+REFUSED_OPTIONS = {
+    "list": "archivebackup builds its own file list",
+    "save_list": "the saved list would land in the tree being backed up",
+    "remove_files": "it deletes your data",
+    "save_purge_list": "purge lists are for deleting data after archiving",
+    "atime": "files outside the filter would never be backed up",
+    "mtime": "files outside the filter would never be backed up",
+    "ctime": "files outside the filter would never be backed up",
+    "dereference": "changes to symlink targets are not seen by incrementals",
+    "ignore_failed_read": "unreadable files would be recorded as backed up",
+    "skip_source_errors": "skipped files would be recorded as backed up",
+}
 
 INCREMENTAL_WARNING = """
 ******************************************************************************
@@ -75,6 +89,29 @@ Run a new full backup now:  archivebackup --full ...
 ******************************************************************************
 """
 
+BACKUP_EPILOG = (
+    """archivetar options:
+  Required:     --bundle-dir, --source, --destination, --destination-dir
+  Passed on:    --size, --tar-size, --tar-processes, compression, --checksum,
+                --force-local-checksum, --rm-at-files, --tar-verbose,
+                --tar-options (no excludes), --user, --group, Globus notify and
+                quota options, -v/-q, --dryrun
+  Always added: --wait (a generation only counts once Globus confirms it)
+  Refused:      """
+    + textwrap.fill(
+        ", ".join("--" + o.replace("_", "-") for o in REFUSED_OPTIONS),
+        width=62,
+        subsequent_indent=" " * 16,
+        break_on_hyphens=False,
+    )
+    + """
+
+exit status: 0 ok, 3 files exist that no generation has captured (run --full),
+anything else: the run failed and is retried as the same generation next time
+"""
+    + INCREMENTAL_WARNING
+)
+
 RESTORE_WARNING = """
 ******************************************************************************
 WARNING: Restoring a full plus incrementals:
@@ -83,6 +120,10 @@ WARNING: Restoring a full plus incrementals:
     *.fullindex.txt of each generation for how the tree looked at that time.
 ******************************************************************************
 """
+
+
+# backup names end up in local paths, Globus paths and glob patterns
+VALID_PREFIX = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 def gen_prefix(prefix, generation):
@@ -97,9 +138,11 @@ STATE_DIR = ".archivebackup"
 
 
 def state_dir_for(prefix):
+    """Where the next run's state lives: <tree>/.archivebackup/<prefix>/."""
     return Path.cwd() / STATE_DIR / prefix
 
 
+# file names for one generation; all start with <prefix>-G####
 def meta_path(state_dir, prefix, generation):
     return Path(state_dir) / f"{gen_prefix(prefix, generation)}.backup.json"
 
@@ -108,8 +151,8 @@ def stamp_path(state_dir, prefix, generation):
     return Path(state_dir) / f"{gen_prefix(prefix, generation)}.stamp"
 
 
-def fullindex_path(scratch, prefix, generation):
-    return Path(scratch) / f"{gen_prefix(prefix, generation)}.fullindex.txt"
+def fullindex_path(work, prefix, generation):
+    return Path(work) / f"{gen_prefix(prefix, generation)}.fullindex.txt"
 
 
 def pending_path(state_dir, prefix, generation):
@@ -153,6 +196,7 @@ def is_inside(path, parent):
 
 
 def _dwalk(**kwargs):
+    """DWalk configured like archivetar's own (install, mpirun, umask 077)."""
     return DWalk(
         inst=archivetar.env.str("AT_MPIFILEUTILS", default=archivetar.fileutils),
         mpirun=archivetar.env.str("AT_MPIRUN", default=archivetar.mpirun),
@@ -274,6 +318,7 @@ def find_uncaptured(current, catalog, out):
 
 
 def report_uncaptured(listing, count, show=10):
+    """Print the ERROR banner and the first `show` uncaptured paths."""
     print(UNCAPTURED_ERROR.format(count=count, listing=listing), file=sys.stderr)
     with open(listing, "rb") as f:
         for i, line in enumerate(f):
@@ -349,14 +394,19 @@ def plan_generation(gens, dest_top, dest_complete):
 
 
 def make_destination_dir(aargs, path):
-    """Create this generation's folder on the Globus destination."""
+    """Create this generation's folder (and the backup's folder) on Globus.
+
+    Globus mkdir is not recursive, so the parent is created first.
+    """
     import globus_sdk
 
-    try:
-        globus_client(aargs).tc.operation_mkdir(aargs.destination, str(path))
-    except globus_sdk.TransferAPIError as e:
-        if "Exists" not in str(e.code):
-            raise
+    tc = globus_client(aargs).tc
+    for folder in (PurePosixPath(path).parent, PurePosixPath(path)):
+        try:
+            tc.operation_mkdir(aargs.destination, str(folder))
+        except globus_sdk.TransferAPIError as e:
+            if "Exists" not in str(e.code):
+                raise
 
 
 def generation_destination(aargs, prefix):
@@ -373,6 +423,29 @@ def generation_destination(aargs, prefix):
     return ["--destination-dir", aargs.destination_dir, "--wait"]  # last wins
 
 
+def private_work_dir(scratch, prefix):
+    """A 0700 directory of our own inside --bundle-dir for all temporary files.
+
+    --bundle-dir is often a shared space like /tmp; keeping everything in a
+    private directory stops other users reading the file lists or planting
+    symlinks where we are about to write.
+    """
+    work = Path(scratch) / f"archivebackup-{prefix}"
+    work.mkdir(mode=0o700, parents=True, exist_ok=True)
+    st = os.lstat(work)
+    if not os.path.isdir(work) or os.path.islink(work) or st.st_uid != os.getuid():
+        sys.exit(f"archivebackup: {work} is not a directory owned by you")
+    os.chmod(work, 0o700)
+    return work
+
+
+def remove_temporary_files(work, prefix):
+    """Delete the walk caches and lists of this run; tars are left alone."""
+    for pattern in (f"{prefix}-20*", f"{prefix}.*.entries", f"{prefix}-changed.*"):
+        for p in Path(work).glob(pattern):
+            p.unlink(missing_ok=True)
+
+
 def run_archivetar(argv):
     """Run archivetar in-process; returns its exit code."""
     try:
@@ -386,17 +459,26 @@ def parse_backup_args(argv):
     """Split archivebackup options from the archivetar options passed through."""
     parser = argparse.ArgumentParser(
         prog="archivebackup",
-        description="Full and incremental backups using archivetar. "
-        "Any other archivetar option (--bundle-dir, --destination-dir, "
-        "--tar-size, compression, ...) is passed through to archivetar.",
-        epilog=INCREMENTAL_WARNING,
+        usage="%(prog)s --prefix NAME --bundle-dir SCRATCH --source UUID "
+        "--destination UUID --destination-dir PATH [options] "
+        "[archivetar options]",
+        description=textwrap.dedent("""\
+            Full and incremental backups of the current directory to a Globus
+            archive, using archivetar. Each run uploads a new generation
+            <prefix>-G#### into its own folder under --destination-dir.
+
+            State for the next run is kept in ./.archivebackup/<prefix>/.
+            --bundle-dir is scratch space and may be wiped between runs."""),
+        epilog=BACKUP_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "-p",
         "--prefix",
         required=True,
-        help="Backup name. Generations are named <prefix>-G0001, <prefix>-G0002, ...",
+        metavar="NAME",
+        help="Backup name; use the same one every run. Generations are named "
+        "NAME-G0001, NAME-G0002, ...",
     )
     parser.add_argument(
         "--full",
@@ -425,28 +507,40 @@ def parse_backup_args(argv):
     return parser.parse_known_args(argv)
 
 
-def check_options(aargs):
-    """Refuse archivetar options that would make a backup unsafe or incomplete."""
+def check_options(prefix, aargs):
+    """Refuse options that would make a backup unsafe or incomplete."""
+    if not VALID_PREFIX.fullmatch(prefix):
+        sys.exit(
+            f"archivebackup: --prefix {prefix!r} may only contain letters, digits, "
+            "'.', '_' and '-', and must start with a letter or digit"
+        )
     if not (aargs.source and aargs.destination and aargs.destination_dir):
         sys.exit(
             "archivebackup requires Globus: --source, --destination and "
             "--destination-dir (the backup lives on the destination)"
         )
-    if aargs.remove_files:
-        sys.exit("--remove-files deletes your data; it is not allowed for backups")
     if not aargs.bundle_dir:
         sys.exit(
-            "--bundle-dir is required: scratch space outside the directory being "
-            "backed up for tars and lists (it can be wiped between runs)"
+            "archivebackup: --bundle-dir is required: scratch space outside the "
+            "directory being backed up for tars and lists (it can be wiped "
+            "between runs)"
         )
     if is_inside(aargs.bundle_dir, Path.cwd()):
-        sys.exit(f"--bundle-dir {aargs.bundle_dir} must be outside {Path.cwd()}")
-    for opt in ("atime", "mtime", "ctime"):
-        if getattr(aargs, opt):
+        sys.exit(
+            f"archivebackup: --bundle-dir {aargs.bundle_dir} must be outside "
+            f"{Path.cwd()}"
+        )
+    for opt, reason in REFUSED_OPTIONS.items():
+        if getattr(aargs, opt, None):
             sys.exit(
-                f"--{opt} is not allowed for backups: files outside the filter would "
-                "never be backed up, and archivebackup already selects changed files"
+                f"archivebackup: --{opt.replace('_', '-')} is not allowed: {reason}"
             )
+    tar_options = (aargs.tar_options or "").split()
+    if any(o.startswith(("--exclude", "-X", "--remove-files")) for o in tar_options):
+        sys.exit(
+            "archivebackup: --tar-options may not exclude or remove files; "
+            "excluded files would be recorded as backed up"
+        )
 
 
 def choose_kind(gens, full=False, full_every=0):
@@ -464,7 +558,7 @@ def choose_kind(gens, full=False, full_every=0):
     return "incremental"
 
 
-def recover_interrupted(state_dir, scratch, prefix, generation):
+def recover_interrupted(state_dir, work, prefix, generation, dryrun=False):
     """Clean up after a run of `generation` that never completed.
 
     Returns the kind ("full"/"incremental") that run was going to be, or None.
@@ -477,11 +571,11 @@ def recover_interrupted(state_dir, scratch, prefix, generation):
     kind = json.loads(pending.read_text())["type"] if pending.exists() else None
     leftovers = [
         p
-        for d in (Path(state_dir), Path(scratch))
+        for d in (Path(state_dir), Path(work))
         for p in [*d.glob(f"{gp}-*"), *d.glob(f"{gp}.*")]
         if p != pending
     ]
-    if kind or leftovers:
+    if (kind or leftovers) and not dryrun:
         logging.warning(
             f"Generation {generation} ({kind or 'unknown'}) did not complete; "
             f"removing its {len(leftovers)} partial local file(s) and retrying it"
@@ -511,6 +605,7 @@ def prunable(gens, keep_fulls):
 
 
 def report_prunable(gens, keep_fulls, state_dir):
+    """Print the generations --keep-fulls says can be deleted; delete nothing."""
     old = prunable(gens, keep_fulls)
     if not old:
         return
@@ -539,11 +634,12 @@ def check_same_source(name, parent):
     if parent.get("source_dir") not in (None, str(Path.cwd())):
         sys.exit(
             f"archivebackup: {name} backs up {parent['source_dir']}; run it "
-            "from there, or use --full to start a new chain from here"
+            "from there, or use --full to start a new chain from here (also "
+            "needed if the directory was moved or is mounted somewhere else)"
         )
 
 
-def select_changed(state_dir, name, parent, cache, prefix):
+def select_changed(state_dir, work, name, parent, cache, prefix):
     """Filter the walk to files changed since the parent generation.
 
     Returns (cache to archive, sorted entries file of it, number of entries).
@@ -559,22 +655,27 @@ def select_changed(state_dir, name, parent, cache, prefix):
             f"archivebackup: {parent_catalog} is missing so this backup cannot "
             "be checked for files that were missed; run a new full with --full"
         )
-    tmp = Path(tempfile.gettempdir())
-    to_archive = tmp / f"{prefix}-changed.cache"
+    to_archive = work / f"{prefix}-changed.cache"
     filter_changed(cache, parent_stamp, to_archive)
-    changed_txt = tmp / f"{prefix}-changed.txt"
+    changed_txt = work / f"{prefix}-changed.txt"
     write_changed_index(to_archive, changed_txt)
-    archived = tmp / f"{prefix}.archived.entries"
+    archived = work / f"{prefix}.archived.entries"
     n_archived = index_entries(changed_txt, archived)
     changed_txt.unlink()
     return to_archive, archived, n_archived
 
 
-def start_generation(bargs, aargs, state_dir, scratch, gens):
-    """Decide this run's generation number and kind, and mark it pending."""
+def start_generation(bargs, aargs, state_dir, work, gens):
+    """Decide this run's generation number and kind, and mark it pending.
+
+    Returns (generation, kind, parent); parent is the generation an
+    incremental builds on, or None for a full.
+    """
     dest_top, dest_complete = destination_state(aargs, bargs.prefix)
     generation, state_behind = plan_generation(gens, dest_top, dest_complete)
-    interrupted = recover_interrupted(state_dir, scratch, bargs.prefix, generation)
+    interrupted = recover_interrupted(
+        state_dir, work, bargs.prefix, generation, dryrun=aargs.dryrun
+    )
     if state_behind:
         logging.warning(
             f"{bargs.prefix}-G{dest_top:04d} exists on the destination but not in "
@@ -585,21 +686,19 @@ def start_generation(bargs, aargs, state_dir, scratch, gens):
     kind = choose_kind(gens, bargs.full or interrupted == "full", bargs.full_every)
     if kind == "incremental":
         check_same_source(bargs.prefix, gens[-1])
-    pending = pending_path(state_dir, bargs.prefix, generation)
-    pending.write_text(json.dumps({"type": kind, "started": time.time()}))
-    return generation, kind, (gens[-1] if gens and kind == "incremental" else None)
+    if not aargs.dryrun:
+        pending = pending_path(state_dir, bargs.prefix, generation)
+        pending.write_text(json.dumps({"type": kind, "started": time.time()}))
+    return generation, kind, (gens[-1] if kind == "incremental" else None)
 
 
 def backup_main(argv):
     """archivebackup entry point."""
     bargs, passthrough = parse_backup_args(argv[1:])
 
-    if bargs.list:
-        sys.exit("archivebackup builds its own file list; --list is not allowed")
-
     # validate the pass-through options exactly as archivetar would
     aargs = archivetar_parse_args(["--prefix", bargs.prefix] + passthrough)
-    aargs.save_list = bargs.save_list
+    aargs.list, aargs.save_list = bargs.list, bargs.save_list
 
     logging.basicConfig(
         level=(
@@ -609,14 +708,16 @@ def backup_main(argv):
         )
     )
 
-    check_options(aargs)
+    check_options(bargs.prefix, aargs)
 
     state_dir = state_dir_for(bargs.prefix)
     state_dir.mkdir(parents=True, exist_ok=True)
-    scratch = Path(aargs.bundle_dir)
-    scratch.mkdir(parents=True, exist_ok=True)
+    work = private_work_dir(aargs.bundle_dir, bargs.prefix)
+    # archivetar's own walk caches and lists go to the temp dir; keep them in
+    # our private directory too
+    tempfile.tempdir = str(work)
     gens = load_generations(state_dir, bargs.prefix)
-    generation, kind, parent = start_generation(bargs, aargs, state_dir, scratch, gens)
+    generation, kind, parent = start_generation(bargs, aargs, state_dir, work, gens)
     prefix = gen_prefix(bargs.prefix, generation)
     pending = pending_path(state_dir, bargs.prefix, generation)
     logging.info(f"----> Backup {bargs.prefix} generation {generation} ({kind})")
@@ -630,11 +731,10 @@ def backup_main(argv):
     make_stamp(stamp, stamp_epoch)
 
     cache = walk_full(aargs, prefix)
-    fullindex = fullindex_path(scratch, bargs.prefix, generation)
+    fullindex = fullindex_path(work, bargs.prefix, generation)
     write_fullindex(cache, fullindex)
 
-    tmp = Path(tempfile.gettempdir())
-    current = tmp / f"{prefix}.current.entries"
+    current = work / f"{prefix}.current.entries"
     n_current = index_entries(fullindex, current)
 
     if kind == "full":
@@ -643,10 +743,11 @@ def backup_main(argv):
     else:
         parent_catalog = catalog_path(state_dir, bargs.prefix, parent["generation"])
         to_archive, archived, n_archived = select_changed(
-            state_dir, bargs.prefix, parent, cache, prefix
+            state_dir, work, bargs.prefix, parent, cache, prefix
         )
 
-    extra = generation_destination(aargs, prefix)
+    # tars go to our private directory, uploads to this generation's folder
+    extra = ["--bundle-dir", str(work)] + generation_destination(aargs, prefix)
 
     empty = n_archived == 0
     if empty:
@@ -679,8 +780,9 @@ def backup_main(argv):
         logging.info("--dryrun: not recording this generation")
         if n_uncaptured:
             report_uncaptured(uncaptured, n_uncaptured)
-        for path in (stamp, fullindex, catalog, uncaptured, pending):
+        for path in (stamp, fullindex, catalog, uncaptured):
             path.unlink(missing_ok=True)
+        remove_temporary_files(work, prefix)
         return
 
     meta = {
@@ -723,6 +825,9 @@ def backup_main(argv):
             )
             stamp_path(state_dir, bargs.prefix, g["generation"]).unlink(missing_ok=True)
 
+    remove_temporary_files(work, prefix)
+    if aargs.rm_at_files:
+        fullindex.unlink()  # uploaded and confirmed above
     report_prunable(gens + [meta], bargs.keep_fulls, state_dir)
 
     if n_uncaptured:
@@ -771,6 +876,8 @@ def copy_large_files(gen_dir, prefix, uargs):
         logging.info(f"Restoring large file {rel}")
         if not uargs.dryrun:
             dest.parent.mkdir(parents=True, exist_ok=True)
+            if dest.is_symlink():  # replace a link, never write through it
+                dest.unlink()
             shutil.copy2(src, dest)
 
 
@@ -778,17 +885,29 @@ def restore_main(argv):
     """archiverestore entry point."""
     parser = argparse.ArgumentParser(
         prog="archiverestore",
-        description="Restore an archivebackup into the current directory: the "
-        "most recent full, then each incremental after it in order. Other "
-        "unarchivetar options are passed through.",
-        epilog=RESTORE_WARNING,
+        usage="%(prog)s --prefix NAME --from DIR [--generation N] "
+        "[unarchivetar options]",
+        description=textwrap.dedent("""\
+            Restore an archivebackup into the current directory, which should be
+            empty: the most recent full, then each incremental after it in order,
+            so the newest version of every file wins. Copy the backup folder back
+            from the archive first and point --from at it."""),
+        epilog="""unarchivetar options:
+  Passed on:  --tar-processes, --folder, --which-archive, --tar-options,
+              --tar-verbose, --dryrun, -v/-q
+  Refused:    --keep-old-files, --skip-old-files, --keep-newer-files
+              (they would keep an older generation's version of a file)
+""" + RESTORE_WARNING,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("-p", "--prefix", required=True, help="Backup name")
+    parser.add_argument(
+        "-p", "--prefix", required=True, metavar="NAME", help="Backup name"
+    )
     parser.add_argument(
         "--from",
         dest="source",
         default=".",
+        metavar="DIR",
         help="Where the backup was copied to: either the per-generation folders "
         "from the Globus destination, or one folder with all tars and "
         "*.backup.json files (default: current directory)",
@@ -797,6 +916,7 @@ def restore_main(argv):
         "--generation",
         type=int,
         default=None,
+        metavar="N",
         help="Restore the tree as of this generation (default: latest)",
     )
     parser.add_argument(
@@ -814,7 +934,13 @@ def restore_main(argv):
             "--keep-newer-files would keep older generations' versions; restore "
             "into an empty directory instead"
         )
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=(
+            logging.WARNING
+            if uargs.quiet
+            else logging.DEBUG if uargs.verbose else logging.INFO
+        )
+    )
 
     source = Path(rargs.source)
     gens = load_generations(source, rargs.prefix)
@@ -850,5 +976,5 @@ def restore_main(argv):
             if e.code:
                 sys.exit(e.code)
         # in generation order, so a later version always wins
-        if gen_dir(g) != source:
+        if gen_dir(g) != source and not uargs.which_archive:
             copy_large_files(gen_dir(g), g["prefix"], uargs)
