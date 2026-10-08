@@ -23,7 +23,7 @@ Building archivetar
    * archivetar >= v1.1.x requires [v0.12.1-brockp](https://github.com/brockpalen/mpifileutils/releases/tag/v0.12.1-brockp)
    * archivetar <= v1.0.x requires [v0.10.2-brockp](https://github.com/brockpalen/mpifileutils/releases/tag/v0.10.2-brockp)
    * Override the version `build.sh` uses with `MFU_VERSION=<tag> ./build.sh`
- * python3.6+
+ * python3.10+
  * `pip install pipenv`
  * `pipenv install`
  * `pipenv run pyinstaller bin/archivetar --collect-all globus_sdk -p . --onefile`   # create executable no need for pipenv
