@@ -4,6 +4,7 @@ from contextlib import ExitStack as does_not_raise
 from unittest.mock import MagicMock
 
 import pytest
+from freezegun import freeze_time
 
 import archivetar
 from archivetar import build_list, validate_prefix
@@ -85,7 +86,7 @@ def test_file_check(tmp_path):
         ),
     ],
 )
-@pytest.mark.freeze_time("2017-05-21")
+@freeze_time("2017-05-21")
 def test_build_list(kwargs, outcache, monkeypatch):
     """test build_list function inputs/output expected"""
     # fake dwalk

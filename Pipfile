@@ -7,8 +7,6 @@ verify_ssl = true
 pytest = "*"
 flake8 = "*"
 isort = "*"
-pytest-flake8 = "*"
-pytest-freezegun = "*"
 pytest-cov = "*"
 codecov = "*"
 pydocstyle = "*"
@@ -17,6 +15,7 @@ black = "*"
 pre-commit = "*"
 yamllint = "*"
 pyinstaller = "*"
+freezegun = "*"
 
 [packages]
 humanfriendly = "*"
