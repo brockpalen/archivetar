@@ -8,7 +8,11 @@ import globus_sdk
 from globus_sdk.scopes import TransferScopes
 from humanfriendly import format_size
 
-from .exceptions import GlobusFailedTransfer, ScopeOrSingleDomainError
+from .exceptions import (
+    GlobusFailedTransfer,
+    GlobusTransferConflict,
+    ScopeOrSingleDomainError,
+)
 
 logging.getLogger(__name__).addHandler(logging.NullHandler)
 
@@ -280,9 +284,21 @@ class GlobusTransfer:
             logging.debug("No current TransferData queued found")
             return None
 
-        transfer = self.tc.submit_transfer(self.TransferData)
+        try:
+            transfer = self.tc.submit_transfer(self.TransferData)
+        except globus_sdk.TransferAPIError as err:
+            details = str(err).lower()
+            is_conflict = (
+                getattr(err, "http_status", None) == 409
+                or getattr(err, "code", None) == "Conflict"
+                or ("409" in details and "conflict" in details)
+            )
+            if is_conflict and "identical paths" in details:
+                raise GlobusTransferConflict(err) from err
+            raise
         logging.debug(f"Submitted Transfer: {transfer['task_id']}")
         self.transfers.append(transfer)
+        self.TransferData = None
         return transfer["task_id"]
 
     def task_successful_transfers(self, task_id):
