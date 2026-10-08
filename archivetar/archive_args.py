@@ -1,4 +1,5 @@
 """archivetar CLI arguments parsing."""
+
 import argparse
 import multiprocessing as mp
 import pathlib

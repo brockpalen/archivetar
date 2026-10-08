@@ -159,9 +159,9 @@ class GlobusTransfer:
         kwargs = {}
         # only pass session_required_single_domain if it's requested by the collection
         if self.session_required_single_domain:
-            kwargs[
-                "session_required_single_domain"
-            ] = self.session_required_single_domain
+            kwargs["session_required_single_domain"] = (
+                self.session_required_single_domain
+            )
 
         authorize_url = self.client.oauth2_get_authorize_url(**kwargs)
         print("\nPlease go to this URL and login: \n{0}".format(authorize_url))

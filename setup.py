@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="archivetar",
-    version="0.13.1",
+    version="1.0.1",
     author="Brock Palen",
     author_email="brockp@umich.edu",
     description="Prep folder for archive",
