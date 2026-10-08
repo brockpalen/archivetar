@@ -35,10 +35,10 @@ cd deps
 cd ..
 
 
-git clone https://github.com/brockpalen/mpifileutils.git
-cd mpifileutils
-# git checkout text-out
-cd ../
+# Pinned patched mpiFileUtils release; override with MFU_VERSION=<tag> ./build.sh
+# archivetar <= v1.0.x requires v0.10.2-brockp
+MFU_VERSION=${MFU_VERSION:-v0.10.2-brockp}
+git -c advice.detachedHead=false clone --branch "$MFU_VERSION" --depth 1 https://github.com/brockpalen/mpifileutils.git
 mkdir build install
 cd build
 cmake ../mpifileutils \
