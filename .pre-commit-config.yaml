@@ -3,14 +3,14 @@ repos:
     hooks:
       - id: isort
         name: isort
-        stages: [commit]
+        stages: [pre-commit]
         language: system
         entry: pipenv run isort
         types: [python]
 
       - id: black
         name: black
-        stages: [commit]
+        stages: [pre-commit]
         language: system
         entry: pipenv run black
         types: [python]
@@ -25,7 +25,7 @@ repos:
 
       - id: pytest
         name: pytest
-        stages: [commit]
+        stages: [pre-commit]
         language: system
         entry: pipenv run pytest --no-cov
         types: [python]
