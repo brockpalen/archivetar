@@ -35,7 +35,12 @@ from archivetar.archive_args import parse_args
 from archivetar.exceptions import ArchivePrefixConflict, TarError
 from archivetar.unarchivetar import find_prefix_files
 from GlobusTransfer import GlobusTransfer
-from GlobusTransfer.exceptions import GlobusFailedTransfer, GlobusTransferConflict
+from GlobusTransfer.exceptions import (
+    GlobusDestinationError,
+    GlobusFailedTransfer,
+    GlobusSourceError,
+    GlobusTransferConflict,
+)
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
 
@@ -279,18 +284,38 @@ def globus_transfer_singleton(args, path, label="Globus Singleton"):
     return taskid
 
 
-def create_sha1_manifest_from_file(path):
+def create_sha1_manifest_from_file(path, dereference=False, skip_unreadable=False):
     """
     Create a manifest file suitable for sha1sum -c from a file containing lists of files.
 
-    path (str): Path to file with list of files to checksum
+    path (str): Path to file with list of files to checksum (one per line,
+        exactly as given to tar, so names may start or end with spaces)
+    dereference (bool): tar --dereference was used, so symlinks were stored
+        as the files they point to and are checksummed as such.  Otherwise
+        tar stores a symlink as just a link, with no content to checksum, so
+        symlinks (including dangling ones) are skipped.
+    skip_unreadable (bool): tar --ignore-failed-read was used, so files that
+        vanished or cannot be read are skipped with a warning, like tar does,
+        instead of failing.
     """
     file_list = Path(path)
     sha_list = file_list.with_suffix(".sha1")
-    with sha_list.open("w") as f:
-        for line in file_list.read_text().splitlines():
-            path = line.strip()
-            f.write(f"{sha1_of(path)} {line}\n")
+    # surrogateescape round-trips file names that are not valid UTF-8
+    names = file_list.read_text(errors="surrogateescape").splitlines()
+    with sha_list.open("w", errors="surrogateescape") as f:
+        for name in names:
+            entry = Path(name)
+            if entry.is_symlink() and not dereference:
+                logging.debug(f"Not checksumming symlink {name}")
+                continue
+            try:
+                digest = sha1_of(entry)
+            except (FileNotFoundError, PermissionError) as e:
+                if not skip_unreadable:
+                    raise
+                logging.warning(f"Not checksumming {name}: {e.strerror}")
+                continue
+            f.write(f"{digest} {name}\n")
 
     return sha_list
 
@@ -505,14 +530,20 @@ def process(q, out_q, iolock, args):
             with iolock:
                 tar = SuperTar(**t_args)  # call inside the lock to keep stdout pretty
                 tar.addfromfile(tar_list)
-            tar.archive()  # this is the long running portion so let run outside the lock it prints nothing anyway
-            filesize = Path(tar.filename).stat().st_size
 
-            # create checksums for tared files
+            # checksum before tar runs: with --remove-files tar deletes them
             checksum_manifest = None
+            checksum_p = None
             if args.checksum:
                 logging.debug(f"Checksums requested making for files in tar {tar_list}")
-                checksum_manifest = create_sha1_manifest_from_file(tar_list)
+                checksum_manifest = create_sha1_manifest_from_file(
+                    tar_list,
+                    dereference=args.dereference,
+                    skip_unreadable=args.ignore_failed_read,
+                )
+
+            tar.archive()  # this is the long running portion so let run outside the lock it prints nothing anyway
+            filesize = Path(tar.filename).stat().st_size
 
             with iolock:
                 logging.info(
@@ -561,7 +592,7 @@ def process(q, out_q, iolock, args):
                         f"Globus Transfer of Small file tar {path.name} : {taskid}"
                     )
 
-            if (
+            if args.destination_dir and (
                 args.wait or args.rm_at_files
             ):  # wait for globus transfers to finish, in own block to avoid iolock
                 globus.task_wait(taskid)
@@ -572,7 +603,7 @@ def process(q, out_q, iolock, args):
                     tar_list.unlink()
                     logging.info(f"Deleting {index_p}")
                     index_p.unlink()
-                    if checksum_p.is_file():
+                    if checksum_p is not None and checksum_p.is_file():
                         logging.info(f"Deleting {checksum_p}")
                         checksum_p.unlink()
         except GlobusTransferConflict as e:
@@ -647,18 +678,23 @@ def main(argv):
 
     # if using globus, init to prompt for endpoiont activation etc
     if args.destination_dir:
-        globus = GlobusTransfer(
-            args.source,
-            args.destination,
-            args.destination_dir,
-            # note notify are the reverse of the SDK
-            notify_on_succeeded=args.no_notify_on_succeeded,
-            notify_on_failed=args.no_notify_on_failed,
-            notify_on_inactive=args.no_notify_on_inactive,
-            fail_on_quota_errors=args.fail_on_quota_errors,
-            skip_source_errors=args.skip_source_errors,
-            preserve_timestamp=args.preserve_timestamp,
-        )
+        try:
+            globus = GlobusTransfer(
+                args.source,
+                args.destination,
+                args.destination_dir,
+                # note notify are the reverse of the SDK
+                notify_on_succeeded=args.no_notify_on_succeeded,
+                notify_on_failed=args.no_notify_on_failed,
+                notify_on_inactive=args.no_notify_on_inactive,
+                fail_on_quota_errors=args.fail_on_quota_errors,
+                skip_source_errors=args.skip_source_errors,
+                preserve_timestamp=args.preserve_timestamp,
+            )
+        except (GlobusSourceError, GlobusDestinationError) as e:
+            # found before any scanning or tars, nothing to clean up
+            logging.error(e)
+            sys.exit(1)
 
     # do we have a user provided list?
     if args.list:

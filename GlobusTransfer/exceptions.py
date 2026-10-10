@@ -37,3 +37,15 @@ class ScopeOrSingleDomainError(GlobusError):
     """Auth found missing scope or single_domain requirement"""
 
     pass
+
+
+class GlobusSourceError(GlobusError):
+    """The current directory is not visible on the source collection."""
+
+    pass
+
+
+class GlobusDestinationError(GlobusError):
+    """The destination directory does not exist and cannot be created."""
+
+    pass

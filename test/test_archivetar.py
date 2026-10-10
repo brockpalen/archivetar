@@ -132,3 +132,43 @@ def test_validate_prefix(tmp_path, prefix, tarname, exexception):
 
     with exexception:
         validate_prefix(prefix)
+
+
+@pytest.fixture
+def checksum_tree(tmp_path, monkeypatch):
+    """A tar list with a file, links, an odd name and a vanished file."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data.txt").write_text("hello")
+    (tmp_path / "trail.txt ").write_text("spaces")
+    os.symlink("data.txt", "good-link")
+    os.symlink("doesntexist", "dead-link")
+    tar_list = tmp_path / "p-1.DONT_DELETE.txt"
+    tar_list.write_text("data.txt\ntrail.txt \ngood-link\ndead-link\n")
+    return tar_list
+
+
+def manifest(path):
+    return [line.split(" ", 1)[1] for line in path.read_text().splitlines()]
+
+
+def test_checksum_skips_symlinks_including_dangling(checksum_tree):
+    """tar stores links as links; a dead link must not fail the tar."""
+    sha = archivetar.create_sha1_manifest_from_file(checksum_tree)
+    assert manifest(sha) == ["data.txt", "trail.txt "]
+    assert sha.read_text().startswith(
+        "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d data.txt\n"
+    )
+
+
+def test_checksum_with_dereference_follows_good_links(checksum_tree):
+    checksum_tree.write_text("data.txt\ngood-link\n")
+    sha = archivetar.create_sha1_manifest_from_file(checksum_tree, dereference=True)
+    assert manifest(sha) == ["data.txt", "good-link"]
+
+
+def test_checksum_vanished_file_fails_unless_ignore_failed_read(checksum_tree):
+    checksum_tree.write_text("data.txt\ngone.txt\n")
+    with pytest.raises(FileNotFoundError):
+        archivetar.create_sha1_manifest_from_file(checksum_tree)
+    sha = archivetar.create_sha1_manifest_from_file(checksum_tree, skip_unreadable=True)
+    assert manifest(sha) == ["data.txt"]
