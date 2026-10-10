@@ -35,7 +35,12 @@ from archivetar.archive_args import parse_args
 from archivetar.exceptions import ArchivePrefixConflict, TarError
 from archivetar.unarchivetar import find_prefix_files
 from GlobusTransfer import GlobusTransfer
-from GlobusTransfer.exceptions import GlobusFailedTransfer, GlobusTransferConflict
+from GlobusTransfer.exceptions import (
+    GlobusDestinationError,
+    GlobusFailedTransfer,
+    GlobusSourceError,
+    GlobusTransferConflict,
+)
 from mpiFileUtils import DWalk
 from SuperTar import SuperTar
 
@@ -673,18 +678,23 @@ def main(argv):
 
     # if using globus, init to prompt for endpoiont activation etc
     if args.destination_dir:
-        globus = GlobusTransfer(
-            args.source,
-            args.destination,
-            args.destination_dir,
-            # note notify are the reverse of the SDK
-            notify_on_succeeded=args.no_notify_on_succeeded,
-            notify_on_failed=args.no_notify_on_failed,
-            notify_on_inactive=args.no_notify_on_inactive,
-            fail_on_quota_errors=args.fail_on_quota_errors,
-            skip_source_errors=args.skip_source_errors,
-            preserve_timestamp=args.preserve_timestamp,
-        )
+        try:
+            globus = GlobusTransfer(
+                args.source,
+                args.destination,
+                args.destination_dir,
+                # note notify are the reverse of the SDK
+                notify_on_succeeded=args.no_notify_on_succeeded,
+                notify_on_failed=args.no_notify_on_failed,
+                notify_on_inactive=args.no_notify_on_inactive,
+                fail_on_quota_errors=args.fail_on_quota_errors,
+                skip_source_errors=args.skip_source_errors,
+                preserve_timestamp=args.preserve_timestamp,
+            )
+        except (GlobusSourceError, GlobusDestinationError) as e:
+            # found before any scanning or tars, nothing to clean up
+            logging.error(e)
+            sys.exit(1)
 
     # do we have a user provided list?
     if args.list:

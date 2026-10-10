@@ -2,14 +2,16 @@ import json
 import logging
 import os
 import stat
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import globus_sdk
 from globus_sdk.scopes import TransferScopes
 from humanfriendly import format_size
 
 from .exceptions import (
+    GlobusDestinationError,
     GlobusFailedTransfer,
+    GlobusSourceError,
     GlobusTransferConflict,
     ScopeOrSingleDomainError,
 )
@@ -157,6 +159,11 @@ class GlobusTransfer:
             else:
                 clean = True
 
+        # find out now, not hours later when the first tar is ready, if the
+        # source is visible and the destination is usable
+        self.check_source()
+        self.ensure_destination()
+
     def _save_tokens(self, tokens):
         """Save Globus auth tokens as required.
 
@@ -203,23 +210,23 @@ class GlobusTransfer:
 
     def check_for_concent_required(self, target, path):
         """
-        To make sure our tokens have access before doing anything try to ls each.
+        Make sure our tokens have access before doing anything by listing path.
 
         target : UUID of collection / endpoint
         path : path to list
 
-        If there is any transfer errors it liekly is because of not having required concent on GCS5 hoosts
-        or domain constraints when using HA collections.  These are populated and looped through until
-        no additional errors exist.
+        GCS5 collections can require extra consent, and HA collections can
+        require a single-domain session; both show up as errors on this ls.
+        Those are recorded and ScopeOrSingleDomainError is raised so the
+        caller logs in again with them, looping until none remain.
 
-        This could cause issues if there are other unknown errors because the ones we care about are all the same exception.
+        A path that does not exist is not an access problem: it is ignored
+        here and handled by check_source() and ensure_destination().  Any
+        other error is raised.
         """
-
         try:
-            self.tc.operation_ls(target, path)
+            self.tc.operation_ls(target, path=path)
         except globus_sdk.TransferAPIError as err:
-            print(err)
-            print(err.info.authorization_parameters.session_required_single_domain)
             if err.info.consent_required:
                 self.required_scopes.extend(err.info.consent_required.required_scopes)
                 raise ScopeOrSingleDomainError("adding missing consent")
@@ -228,6 +235,67 @@ class GlobusTransfer:
                     err.info.authorization_parameters.session_required_single_domain
                 )
                 raise ScopeOrSingleDomainError("adding missing domain")
+            if err.http_status == 404:
+                return
+            raise
+
+    def check_source(self):
+        """The current directory must be visible on the source collection.
+
+        archivetar sends files by their absolute path, so if the source
+        collection does not show this directory at the same path every
+        transfer would fail.
+        """
+        path = os.getcwd()
+        try:
+            self.tc.operation_ls(self.ep_source, path=path)
+        except globus_sdk.TransferAPIError as err:
+            if err.http_status == 404:
+                raise GlobusSourceError(
+                    f"The current directory {path} was not found on the source "
+                    f"collection {self.ep_source}. Check --source; archivetar "
+                    "needs a collection that shows this directory at the same "
+                    "path."
+                ) from err
+            raise
+
+    def ensure_destination(self):
+        """Create --destination-dir if it does not exist yet.
+
+        Raises GlobusDestinationError right away if it cannot be created (for
+        example no permission), instead of failing after the tars are built.
+        """
+        try:
+            self.tc.operation_ls(self.ep_dest, path=str(self.path_dest))
+            logging.debug(f"Destination {self.path_dest} exists")
+            return
+        except globus_sdk.TransferAPIError as err:
+            if err.http_status != 404:
+                raise
+        logging.info(f"Destination {self.path_dest} does not exist, creating it")
+        self._mkdir_parents(PurePosixPath(self.path_dest))
+
+    def _mkdir_parents(self, path):
+        """mkdir -p on the destination (Globus mkdir is not recursive)."""
+        try:
+            self.tc.operation_mkdir(self.ep_dest, path=str(path))
+        except globus_sdk.TransferAPIError as err:
+            if err.code == "ExternalError.MkdirFailed.Exists":
+                return  # created by someone else meanwhile
+            if err.http_status == 404 and path.parent != path:
+                self._mkdir_parents(path.parent)  # parent missing too
+                self._mkdir_parents(path)
+                return
+            if err.http_status == 403:
+                raise GlobusDestinationError(
+                    f"No permission to create {path} on the destination "
+                    f"collection {self.ep_dest}. Check --destination-dir and "
+                    "that you can write there."
+                ) from err
+            raise GlobusDestinationError(
+                f"Could not create {path} on the destination collection "
+                f"{self.ep_dest}: {err.message}"
+            ) from err
 
     def ls_endpoint(self):
         """Just here for debug that globus is working."""
