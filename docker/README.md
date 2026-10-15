@@ -2,17 +2,6 @@
 
 Archivetar can be built as a [Docker](https://docker.com) container.  For users without existing MPI and CMake installs the container provides all the tools needed.
 
-
-## Running Archivetar container
-
-Once singularity is installed you can pull the [offical image](https://cloud.sylabs.io/library/brockp/default/archivetar)
-
-```
-singularity pull --arch amd64 library://brockp/archivetar/archivetar:master 
-singularity run-help archivetar_master.sif 
-singularity exec archivetar_master.sif archivetar --help
-```
-
 ## Building Docker Image
 
 ### Optional version tag build
@@ -29,6 +18,9 @@ docker build -t archivetar .
 ```
 docker run --rm -v "${PWD}:/data" archivetar
 docker run --rm -v "${PWD}:/data" archivetar archivetar --help
+docker run --rm -v "${PWD}:/data" archivetar archivepurge --help
+docker run --rm -v "${PWD}:/data" archivetar archivescan --help
+docker run --rm -v "${PWD}:/data" archivetar unarchivetar --help
 ```
 
 ## Aditional Utilities
