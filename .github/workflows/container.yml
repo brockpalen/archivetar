@@ -81,3 +81,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
+          # PR images are deleted on close (container-cleanup.yml); without an
+          # attestation each is a single package version, so nothing is orphaned
+          provenance: ${{ github.event_name != 'pull_request' }}
