@@ -16,6 +16,16 @@ Images are built and pushed to [GHCR](https://github.com/brockpalen/archivetar/p
 
 Pin a release tag for reproducible archives; `latest` moves with each release.
 
+### Testing a Pull Request
+
+Pull requests from branches in this repository also push a test image tagged `pr-<number>` once the build and smoke tests pass.  These are for testing only and never move `latest`:
+
+```
+apptainer pull archivetar-pr73.sif docker://ghcr.io/brockpalen/archivetar:pr-73
+```
+
+Pull requests from forks are built and tested but not pushed.
+
 ## Apptainer / Singularity
 
 Pull the image and convert it to a `.sif` file.  Use a release tag (eg `v1.1.1`) or `latest`.
