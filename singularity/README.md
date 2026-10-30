@@ -1,34 +1,23 @@
-# Singularity Container
+# Singularity Container (moved)
 
-Archivetar can be built as a [Singularity](https://cloud.sylabs.io) container.  For users without existing MPI and CMake installs the container provides all the tools needed.
+**The Singularity definition file and the Sylabs library images
+(`library://brockp/archivetar/archivetar`) are retired and no longer updated.**
 
-## Installing Singularity
-
-Refresh to the [Singularity Documentation](https://sylabs.io/guides/3.6/admin-guide/installation.html#distribution-packages-of-singularity) how to install.  For CentOS and RHEL users it can be installed from `epel`.  
-
-
-## Running Archivetar container
-
-Once singularity is installed you can pull the [offical image](https://cloud.sylabs.io/library/brockp/default/archivetar)
+Archivetar is now published as a Docker / OCI image, which Singularity and
+[Apptainer](https://apptainer.org) can pull and run directly without root.
+The commands you already know still work, only the `pull` source changes:
 
 ```
-singularity pull --arch amd64 library://brockp/archivetar/archivetar:master 
-singularity run-help archivetar_master.sif 
-singularity exec archivetar_master.sif archivetar --help
+# old (no longer updated)
+singularity pull --arch amd64 library://brockp/archivetar/archivetar:master
+
+# new
+singularity pull archivetar.sif docker://ghcr.io/brockpalen/archivetar:latest
+singularity exec archivetar.sif archivetar --help
+
+# or with Apptainer
+apptainer pull archivetar.sif docker://ghcr.io/brockpalen/archivetar:latest
+apptainer exec archivetar.sif archivetar --help
 ```
 
-## Building Singuarlity Image
-
-```
-singularity build --remote archivetar.sif archivetar.def
-singularity push -U  archivetar.sif library://brockp/archivetar/archivetar:master
-singularity push -U  archivetar.sif library://brockp/archivetar/archivetar:[tag]
-```
-
-## Aditional Utilities
-
-The image includes several utilities used by `archivetar` but may also be useful on their own:
-
-* mpifileutils eg `mpirun dwalk --help`
-* Parallel Compressors `lbzip2` `pigz` `pixz`
-* lz4-tools
+See [docker/README.md](../docker/README.md) for full instructions.
