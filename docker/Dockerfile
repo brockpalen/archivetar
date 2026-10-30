@@ -43,8 +43,10 @@ WORKDIR /archivetar
 ARG MFU_VERSION
 RUN bash -x build.sh
 
+# --deploy fails on a stale Pipfile.lock instead of silently re-locking, so
+# every image is built from exactly the committed lock
 RUN pip3 install --no-cache-dir pipenv && \
-    pipenv install --dev --python "$(which python3)"
+    pipenv install --deploy --dev --python "$(which python3)"
 
 RUN pipenv run pyinstaller --collect-all globus_sdk bin/archivetar  -p . --onefile && \
     pipenv run pyinstaller --collect-all globus_sdk bin/.archivetar -p . --onefile && \
