@@ -1,0 +1,52 @@
+# Delete the pr-<number> test image from GHCR when a pull request is closed
+# (merged or not). Release and branch tags are never touched.
+name: container-cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  packages: write
+
+jobs:
+  delete-pr-image:
+    # Fork PRs never push an image and only get a read-only token
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete pr-${{ github.event.pull_request.number }} image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          OWNER_TYPE: ${{ github.event.repository.owner.type == 'Organization' && 'orgs' || 'users' }}
+          TAG: pr-${{ github.event.pull_request.number }}
+        run: |
+          versions="/$OWNER_TYPE/$OWNER/packages/container/archivetar/versions"
+
+          if ! listing=$(gh api --paginate "$versions" 2>&1); then
+            echo "No archivetar package to clean up: $listing"
+            exit 0
+          fi
+
+          matches=$(jq -c --arg tag "$TAG" \
+            '.[] | select(.metadata.container.tags | index($tag)) | {id, tags: .metadata.container.tags}' \
+            <<< "$listing")
+
+          if [ -z "$matches" ]; then
+            echo "No image tagged $TAG, nothing to delete"
+            exit 0
+          fi
+
+          while read -r match; do
+            id=$(jq -r .id <<< "$match")
+            tags=$(jq -r '.tags | join(",")' <<< "$match")
+            # Deleting a version removes every tag on it, so never delete one
+            # that is also a release or branch image
+            if [ "$tags" != "$TAG" ]; then
+              echo "::warning::Version $id has tags $tags, not only $TAG; leaving it in place"
+              continue
+            fi
+            gh api --method DELETE "$versions/$id"
+            echo "Deleted $TAG (package version $id)"
+          done <<< "$matches"

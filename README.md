@@ -46,6 +46,15 @@ Usage
 
 See [USAGE.md](USAGE.md)
 
+Containers
+----------
+
+Prebuilt Docker images run under Docker, Apptainer or Singularity, see [docker/README.md](docker/README.md)
+
+```
+apptainer pull archivetar.sif docker://ghcr.io/brockpalen/archivetar:latest
+```
+
 Building archivetar
 -------------------
 

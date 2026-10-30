@@ -9,10 +9,20 @@ Workflow
   * Use `--remove-files` to delete files as they are added to tar
  * Re-hydrate an archived directory with `unarchivetar --prefix <prefix>`
 
-Singularity
------------
+Containers (Docker / Apptainer / Singularity)
+---------------------------------------------
 
-See [singularity](singularity) this is likely recomended for workstation and single user installs.
+A prebuilt container image includes archivetar, mpiFileUtils, MPI and the parallel compressors.
+It runs under Docker, or without root under Apptainer / Singularity, and is likely recommended
+for workstation and single user installs.
+
+```
+apptainer pull archivetar.sif docker://ghcr.io/brockpalen/archivetar:latest
+apptainer exec archivetar.sif archivetar --help
+```
+
+See [docker](docker/README.md) for details.  The previous Sylabs library Singularity images are
+retired, see [singularity](singularity/README.md).
 
 Building archivetar
 -------------------
@@ -57,8 +67,8 @@ AT_CHECKSUM=<calulate checksums or not by default>
 AT_FORCE_LOCAL_CHECKSUM=<calculate locally or us use globus sha1 for large files>
 ```
 
-Singularity containers already have required variables defined inside the
-container (e.g. see `singularity exec archivetar_master.sif env | grep ^AT_`),
+Containers already have required variables defined inside the
+container (e.g. see `apptainer exec archivetar.sif env | grep ^AT_`),
 so you would only need to [re]define the optional ones to suite your site's
 needs.
 
