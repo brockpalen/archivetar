@@ -28,6 +28,7 @@
 
 import argparse
 import fnmatch
+import json
 import logging
 import math
 import os
@@ -140,6 +141,11 @@ parser.add_argument(
     action="store_true",
 )
 parser.add_argument(
+    "--json",
+    help="Print the results as JSON instead of the text summary",
+    action="store_true",
+)
+parser.add_argument(
     "-c",
     "--current-state",
     help="Show the current state of files in archive rather than future state",
@@ -180,6 +186,10 @@ parser.add_argument(
 )
 
 ops = parser.parse_args()
+
+# file names printed by the scan workers share stdout and would corrupt the JSON
+if ops.json and (ops.quiet or ops.print or ops.print_offline):
+    parser.error("--json cannot be combined with --quiet, --print or --print-offline")
 
 if ops.verbose == 1:
     st_handler.setLevel(logging.INFO)
@@ -340,7 +350,28 @@ if __name__ == "__main__":
     tbyte = math.ceil(size / byteintbyte)
     extra_cache = calc_cache(tbyte)  # calculate extra cache for tape data in flight
 
-    if not ops.quiet:
+    elapsed_seconds = time.time() - start_time
+    total_size = size + csize
+    # guard against an empty or fully filtered tree
+    fraction = size / total_size * 100 if total_size else 0.0
+
+    if ops.json:
+        results = {
+            "path": dir_path,
+            "threshold_bytes": ops.size,
+            "current_state": ops.current_state,
+            "dataden": {"files": count, "bytes": size, "size": sizeof_fmt(size)},
+            "cache": {"files": ccnt, "bytes": csize, "size": sizeof_fmt(csize)},
+            "total": {
+                "files": count + ccnt,
+                "bytes": total_size,
+                "size": sizeof_fmt(total_size),
+            },
+            "fraction_offline_percent": fraction,
+            "elapsed_seconds": round(elapsed_seconds, 2),
+        }
+        print(json.dumps(results, indent=2))
+    elif not ops.quiet:
         print("----- Results ------")
         print("Data Den Candidates:")
         print("Files: %s" % (count))
@@ -357,11 +388,7 @@ if __name__ == "__main__":
         print("Size: %s" % (sizeof_fmt(csize)))
         # print("Terabyte %s (Storage: %s, Tape Cache: %s) Cost: $%d" % (tbyte+extra_cache, tbyte, extra_cache, tbyte*lockerrate))
         print("")
-        print("Total Time %.2f Seconds" % (time.time() - start_time))
-
-        total_size = size + csize
-        # guard against an empty or fully filtered tree
-        fraction = size / total_size * 100 if total_size else 0.0
+        print("Total Time %.2f Seconds" % elapsed_seconds)
         print("Fraction Offline: %.5f %%" % fraction)
 
         print("")

@@ -4,6 +4,7 @@ archivescan parses its arguments at import time, so it is exercised as a
 subprocess run inside a temporary directory tree.
 """
 
+import json
 import re
 import subprocess  # nosec B404 - runs our own script with fixed arguments
 import sys
@@ -113,3 +114,29 @@ def test_invalid_size(tmp_path):
     """A malformed size is rejected by argparse."""
     with pytest.raises(subprocess.CalledProcessError):
         run_archivescan(tmp_path, "-s", "lots")
+
+
+def test_json_output(scan_tree):
+    """--json prints a machine-readable summary with raw byte counts."""
+    results = json.loads(run_archivescan(scan_tree, "--json", "-s", "1M"))
+    assert results["threshold_bytes"] == 1024**2
+    assert results["dataden"]["files"] == 2
+    assert results["dataden"]["bytes"] == 22 * 1024**2
+    assert results["cache"] == {"files": 1, "bytes": 1024, "size": "1.0KiB"}
+    assert results["total"]["files"] == 3
+    assert results["total"]["bytes"] == 22 * 1024**2 + 1024
+    assert results["current_state"] is False
+
+
+def test_json_empty_tree(tmp_path):
+    """--json on an empty tree reports zeros."""
+    results = json.loads(run_archivescan(tmp_path, "--json"))
+    assert results["total"]["files"] == 0
+    assert results["fraction_offline_percent"] == 0.0
+
+
+@pytest.mark.parametrize("other_flag", ["--quiet", "--print", "--print-offline"])
+def test_json_rejects_stdout_flags(tmp_path, other_flag):
+    """--json refuses flags that would mix other text into stdout."""
+    with pytest.raises(subprocess.CalledProcessError):
+        run_archivescan(tmp_path, "--json", other_flag)
