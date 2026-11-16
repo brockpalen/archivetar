@@ -31,7 +31,6 @@ import csv
 import fnmatch
 import json
 import logging
-import math
 import os
 import re
 import sys
@@ -150,6 +149,21 @@ parser.add_argument(
 )
 parser.add_argument("--no-header", action="store_true", help="omit the header row")
 parser.add_argument(
+    "-d",
+    "--max-depth",
+    help="One row per directory down to depth N, like du -d; each row counts "
+    "everything below it and the last row (.) is the whole tree",
+    type=int,
+    metavar="N",
+)
+parser.add_argument(
+    "--sort",
+    choices=("size", "files", "cache", "offline", "name"),
+    default="size",
+    help="order of the --max-depth rows: total size, total files, cache files, "
+    "fraction offline (each largest first) or name (default: size)",
+)
+parser.add_argument(
     "-c",
     "--current-state",
     help="Show the current state of files in archive rather than future state",
@@ -191,6 +205,9 @@ parser.add_argument(
 
 ops = parser.parse_args()
 
+if ops.max_depth is not None and ops.max_depth < 0:
+    parser.error("--max-depth must be 0 or more")
+
 # file names printed by the scan workers share stdout and would corrupt the output
 if ops.format != "table" and (ops.quiet or ops.print or ops.print_offline):
     parser.error(
@@ -208,29 +225,64 @@ else:
 recall_queue = Queue()
 
 
-# get size of all files in a directory path
-# filter_size : files greater than this are counted
 def get_size(start_path=".", filter_size=104857600):
-    total_size = 0  # total size to archive
-    total_cnt = 0  # counts for archive
-    ctotal_size = 0  # size for cache (to small for archive)
-    ctotal_cnt = 0  # counts for cache (to small for archive)
-    p = Pool(processes=ops.parallel)
-    # for dirpath, dirnames, filenames in os.walk(start_path):
-    output = p.map(
-        get_size_local,
-        [
-            (dirpath, filenames, filter_size)
-            for dirpath, dirnames, filenames in os.walk(start_path)
-        ],
-    )
-    for a, b, c, d in output:
-        total_size += a
-        total_cnt += b
-        ctotal_size += c
-        ctotal_cnt += d
+    """Scan a tree in parallel, one task per directory.
 
-    return total_size, total_cnt, ctotal_size, ctotal_cnt
+    Args:
+        start_path: Directory to walk.
+        filter_size: Files larger than this many bytes are Data Den candidates.
+
+    Returns:
+        Dict of directory path to that directory's own files, as
+        ``(dataden_bytes, dataden_files, cache_bytes, cache_files)``.
+    """
+    walked = [
+        (dirpath, filenames, filter_size)
+        for dirpath, dirnames, filenames in os.walk(start_path)
+    ]
+    with Pool(processes=ops.parallel) as pool:
+        output = pool.map(get_size_local, walked)
+    return {task[0]: tally for task, tally in zip(walked, output)}
+
+
+def is_snapshot(dirpath):
+    """Whether a directory is inside a locker '.snapshot' directory.
+
+    Args:
+        dirpath: Directory path from the walk.
+
+    Returns:
+        True if the path should be left out of the scan.
+    """
+    return re.search(r".snapshot", dirpath) is not None
+
+
+def rollup(tallies, max_depth):
+    """Add each directory's own files into its ancestors, down to max_depth.
+
+    Works like ``du -d``: every directory at or above max_depth gets a total
+    of everything below it, and "." is the whole tree.
+
+    Args:
+        tallies: Per-directory results from :func:`get_size`.
+        max_depth: Deepest level that gets its own total; 0 for only ".".
+
+    Returns:
+        Dict of relative path ("." or "./name/...") to
+        ``[dataden_bytes, dataden_files, cache_bytes, cache_files]``.
+    """
+    totals = {".": [0, 0, 0, 0]}
+    for dirpath, tally in tallies.items():
+        if is_snapshot(dirpath):
+            continue
+        relative = os.path.relpath(dirpath, ".")
+        parts = [] if relative == "." else relative.split(os.sep)
+        for depth in range(min(len(parts), max_depth) + 1):
+            key = os.path.join(".", *parts[:depth]) if depth else "."
+            accumulated = totals.setdefault(key, [0, 0, 0, 0])
+            for index, number in enumerate(tally):
+                accumulated[index] += number
+    return totals
 
 
 def get_size_local(args):
@@ -241,7 +293,7 @@ def get_size_local(args):
     ctotal_cnt = 0  # counts for cache (to small for archive)
 
     # skip if a locker '.snapshot' directory
-    if re.search(r".snapshot", dirpath):
+    if is_snapshot(dirpath):
         return total_size, total_cnt, ctotal_size, ctotal_cnt
 
     for f in filenames:
@@ -361,6 +413,33 @@ def format_size(num_bytes):
     return f"{round_number(num_bytes)} {'byte' if num_bytes == 1 else 'bytes'}"
 
 
+def human_size(num_bytes):
+    """Format a byte count the way GNU ``du -h`` does, for the directory table.
+
+    Same rules as globus-fs du: rounded up so a size is never understated,
+    one decimal below 10 (1.5G), whole numbers from there (234M) and plain
+    bytes below 1K. Integer arithmetic, so no float rounding.
+
+    Args:
+        num_bytes: Size in bytes.
+
+    Returns:
+        Text such as "0", "512", "4.0K", "234M" or "1.5G".
+    """
+    if num_bytes < 1024:
+        return str(num_bytes)
+    letters = "KMGTPE"
+    for power, letter in enumerate(letters, start=1):
+        unit = 1024**power
+        tenths = -(-num_bytes * 10 // unit)  # ceil to one decimal, times 10
+        if tenths < 100:
+            return f"{tenths // 10}.{tenths % 10}{letter}"
+        whole = -(-num_bytes // unit)
+        if whole < 1024 or power == len(letters):
+            return f"{whole}{letter}"
+    return str(num_bytes)
+
+
 # terminal control and text direction characters; a file or directory name
 # can contain them and a terminal would act on them instead of showing them
 unsafe_characters = re.compile(
@@ -391,27 +470,55 @@ def safe(text):
     return unsafe_characters.sub(visible, text)
 
 
-def print_report(row):
-    """Print the results in the format chosen with --format.
-
-    Keys and layout match ``globus-fs archivescan`` so output from both
-    tools can be combined.
+def make_row(path, tally, seconds):
+    """Build one result row with the keys globus-fs archivescan uses.
 
     Args:
-        row: Scan results, as built in the main program.
+        path: Absolute path of the directory the row describes.
+        tally: ``[dataden_bytes, dataden_files, cache_bytes, cache_files]``.
+        seconds: Time the whole scan took.
+
+    Returns:
+        Dict of results, in output column order.
+    """
+    dataden_bytes, dataden_files, cache_bytes, cache_files = tally
+    total_bytes = dataden_bytes + cache_bytes
+    # no fraction for an empty or fully filtered tree
+    fraction = 100.0 * dataden_bytes / total_bytes if total_bytes else None
+    return {
+        "path": path,
+        "threshold_bytes": ops.size,
+        "dataden_files": dataden_files,
+        "dataden_bytes": dataden_bytes,
+        "cache_files": cache_files,
+        "cache_bytes": cache_bytes,
+        "total_files": dataden_files + cache_files,
+        "total_bytes": total_bytes,
+        "fraction_offline": None if fraction is None else round(fraction, 5),
+        "seconds": seconds,
+    }
+
+
+def print_machine(rows, as_list):
+    """Print rows as tsv, csv or json, with exact byte counts and no units.
+
+    Args:
+        rows: Result rows from :func:`make_row`.
+        as_list: For json, print a list even for one row (--max-depth mode).
     """
     if ops.format == "json":
-        json.dump(row, sys.stdout, indent=2)
+        json.dump(rows if as_list else rows[0], sys.stdout, indent=2)
         print()
-    elif ops.format in ("tsv", "csv"):
-        # one row per scan, so a loop over many directories builds a table
-        writer = csv.writer(
-            sys.stdout,
-            delimiter="\t" if ops.format == "tsv" else ",",
-            lineterminator="\n",
-        )
-        if not ops.no_header:
-            writer.writerow([key.upper() for key in row])
+        return
+    # one row per directory, so a loop over many trees builds one table
+    writer = csv.writer(
+        sys.stdout,
+        delimiter="\t" if ops.format == "tsv" else ",",
+        lineterminator="\n",
+    )
+    if not ops.no_header:
+        writer.writerow([key.upper() for key in rows[0]])
+    for row in rows:
         writer.writerow(
             [
                 (
@@ -422,8 +529,100 @@ def print_report(row):
                 for value in row.values()
             ]
         )
+
+
+def print_report(row):
+    """Print the single-tree summary in the format chosen with --format.
+
+    Keys and layout match ``globus-fs archivescan`` so output from both
+    tools can be combined.
+
+    Args:
+        row: Scan results from :func:`make_row`.
+    """
+    if ops.format != "table":
+        print_machine([row], as_list=False)
     elif not ops.quiet:
         print_table(row)
+
+
+def sort_entries(entries):
+    """Order --max-depth rows by --sort, keeping the "." total last.
+
+    Args:
+        entries: ``(relative path, row)`` pairs.
+
+    Returns:
+        The pairs in display order.
+    """
+    sort_keys = {
+        "size": lambda row: -row["total_bytes"],
+        "files": lambda row: -row["total_files"],
+        "cache": lambda row: -row["cache_files"],
+        # directories with no files have no fraction; put them last
+        "offline": lambda row: (
+            row["fraction_offline"] is None,
+            -(row["fraction_offline"] or 0),
+        ),
+        "name": lambda row: 0,
+    }
+    sort_key = sort_keys[ops.sort]
+    total = [entry for entry in entries if entry[0] == "."]
+    others = [entry for entry in entries if entry[0] != "."]
+    others.sort(key=lambda entry: (sort_key(entry[1]), entry[0]))
+    return others + total
+
+
+def print_directory_report(entries):
+    """Print one row per directory in the format chosen with --format.
+
+    Args:
+        entries: ``(relative path, row)`` pairs in display order.
+    """
+    if ops.format != "table":
+        print_machine([row for _, row in entries], as_list=True)
+    elif not ops.quiet:
+        print_directory_table(entries)
+
+
+def print_directory_table(entries):
+    """Print --max-depth rows as an aligned table for reading by eye.
+
+    Numbers are right-aligned with du -h sizes so magnitudes line up, and
+    the path comes last so long names don't break the columns.
+
+    Args:
+        entries: ``(relative path, row)`` pairs in display order.
+    """
+    columns = (
+        ("DATADEN_FILES", lambda row: str(row["dataden_files"])),
+        ("DATADEN_SIZE", lambda row: human_size(row["dataden_bytes"])),
+        ("CACHE_FILES", lambda row: str(row["cache_files"])),
+        ("CACHE_SIZE", lambda row: human_size(row["cache_bytes"])),
+        ("TOTAL_FILES", lambda row: str(row["total_files"])),
+        ("TOTAL_SIZE", lambda row: human_size(row["total_bytes"])),
+        (
+            "OFFLINE%",
+            lambda row: (
+                "-"
+                if row["fraction_offline"] is None
+                else f"{row['fraction_offline']:.2f}"
+            ),
+        ),
+    )
+    cells = [[render(row) for _, render in columns] for _, row in entries]
+    widths = [
+        max([len(header)] + [len(line[index]) for line in cells])
+        for index, (header, _) in enumerate(columns)
+    ]
+    if not ops.no_header:
+        headers = [
+            header.rjust(widths[index]) for index, (header, _) in enumerate(columns)
+        ]
+        print("  ".join(headers + ["PATH"]))
+    for line, (path, _) in zip(cells, entries):
+        padded = [cell.rjust(widths[index]) for index, cell in enumerate(line)]
+        print("  ".join(padded + [safe(path)]))
 
 
 def print_table(row):
@@ -469,29 +668,18 @@ if __name__ == "__main__":
 
     start_time = time.time()
 
-    size, count, csize, ccnt = get_size(filter_size=ops.size)
-    tbyte = math.ceil(size / byteintbyte)
-    extra_cache = calc_cache(tbyte)  # calculate extra cache for tape data in flight
+    tallies = get_size(filter_size=ops.size)
+    directory_totals = rollup(tallies, ops.max_depth or 0)
+    seconds = round(time.time() - start_time, 2)
 
-    elapsed_seconds = time.time() - start_time
-    total_size = size + csize
-    # no fraction for an empty or fully filtered tree
-    fraction = 100.0 * size / total_size if total_size else None
-
-    print_report(
-        {
-            "path": dir_path,
-            "threshold_bytes": ops.size,
-            "dataden_files": count,
-            "dataden_bytes": size,
-            "cache_files": ccnt,
-            "cache_bytes": csize,
-            "total_files": count + ccnt,
-            "total_bytes": total_size,
-            "fraction_offline": None if fraction is None else round(fraction, 5),
-            "seconds": round(elapsed_seconds, 2),
-        }
-    )
+    entries = [
+        (path, make_row(os.path.normpath(os.path.join(dir_path, path)), tally, seconds))
+        for path, tally in directory_totals.items()
+    ]
+    if ops.max_depth is None:
+        print_report(dict(entries)["."])
+    else:
+        print_directory_report(sort_entries(entries))
 
     if ops.recall:
         recall()

@@ -7,6 +7,7 @@ subprocess run inside a temporary directory tree.
 import csv
 import io
 import json
+import os
 import re
 import subprocess  # nosec B404 - runs our own script with fixed arguments
 import sys
@@ -207,3 +208,166 @@ def test_machine_formats_reject_stdout_flags(tmp_path, output_format, other_flag
 def test_quiet_table(scan_tree):
     """--quiet still silences the default table."""
     assert run_archivescan(scan_tree, "--quiet") == ""
+
+
+@pytest.fixture
+def depth_tree(tmp_path):
+    """A tree with subdirectories, a nested directory and a snapshot.
+
+    Layout (sparse files)::
+
+        top.txt                1 KiB
+        raw/run.tar          300 MiB
+        raw/deep/part.tar    200 MiB
+        notes/a.txt, b.txt     4 KiB each
+        empty/
+        .snapshot/copy.tar     1 GiB  (never counted)
+
+    Args:
+        tmp_path: pytest temporary directory.
+
+    Returns:
+        Path to the populated directory.
+    """
+    files = {
+        "top.txt": 1024,
+        "raw/run.tar": 300 * 1024**2,
+        "raw/deep/part.tar": 200 * 1024**2,
+        "notes/a.txt": 4096,
+        "notes/b.txt": 4096,
+        ".snapshot/copy.tar": 1024**3,
+    }
+    for name, size in files.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.truncate(size)
+    (tmp_path / "empty").mkdir()
+    return tmp_path
+
+
+def depth_rows(cwd, *args):
+    """Run archivescan with --format json and return rows keyed by path.
+
+    Args:
+        cwd: Directory to scan.
+        *args: Extra command line arguments.
+
+    Returns:
+        List of (path relative to cwd, row) in output order.
+    """
+    rows = json.loads(run_archivescan(cwd, "--format", "json", *args))
+    return [(os.path.relpath(row["path"], cwd), row) for row in rows]
+
+
+def test_max_depth_rows_roll_up(depth_tree):
+    """-d 1 gives one row per top directory, each counting everything below."""
+    rows = dict(depth_rows(depth_tree, "-d", "1"))
+    assert set(rows) == {".", "raw", "notes", "empty"}
+    assert rows["raw"]["dataden_files"] == 2
+    assert rows["raw"]["dataden_bytes"] == 500 * 1024**2
+    assert (rows["notes"]["cache_files"], rows["notes"]["cache_bytes"]) == (2, 8192)
+    assert rows["empty"]["total_files"] == 0
+    assert rows["empty"]["fraction_offline"] is None
+    # the whole tree, including files directly in it, but not .snapshot
+    assert rows["."]["total_files"] == 5
+    assert rows["."]["total_bytes"] == 500 * 1024**2 + 1024 + 8192
+
+
+def test_max_depth_two_includes_nested(depth_tree):
+    """-d 2 adds the nested directory as its own row."""
+    rows = dict(depth_rows(depth_tree, "-d", "2"))
+    assert rows[os.path.join("raw", "deep")]["dataden_bytes"] == 200 * 1024**2
+    assert rows["raw"]["dataden_bytes"] == 500 * 1024**2
+
+
+@pytest.mark.parametrize(
+    "sort,expected",
+    [
+        ("size", ["raw", "notes", "empty"]),
+        ("files", ["notes", "raw", "empty"]),  # 2 files each: ties sort by name
+        ("cache", ["notes", "empty", "raw"]),
+        ("offline", ["raw", "notes", "empty"]),
+        ("name", ["empty", "notes", "raw"]),
+    ],
+)
+def test_max_depth_sort(depth_tree, sort, expected):
+    """--sort orders the directory rows and the "." total stays last."""
+    paths = [path for path, _ in depth_rows(depth_tree, "-d", "1", "--sort", sort)]
+    assert paths == expected + ["."]
+
+
+def test_max_depth_table(depth_tree):
+    """The table uses du -h sizes, right-aligned, with the path last."""
+    lines = run_archivescan(depth_tree, "-d", "1").splitlines()
+    assert lines[0].split() == [
+        "DATADEN_FILES",
+        "DATADEN_SIZE",
+        "CACHE_FILES",
+        "CACHE_SIZE",
+        "TOTAL_FILES",
+        "TOTAL_SIZE",
+        "OFFLINE%",
+        "PATH",
+    ]
+    assert lines[1].split() == ["2", "500M", "0", "0", "2", "500M", "100.00", "./raw"]
+    assert lines[3].split() == ["0", "0", "0", "0", "0", "0", "-", "./empty"]
+    assert lines[-1].split()[-1] == "."
+    # every column lines up on the right
+    assert len({len(line) - len(line.split()[-1]) for line in lines}) == 1
+
+
+def test_max_depth_table_no_header(depth_tree):
+    """--no-header drops the header line of the directory table too."""
+    lines = run_archivescan(depth_tree, "-d", "1", "--no-header").splitlines()
+    assert len(lines) == 4
+    assert "PATH" not in lines[0]
+
+
+@pytest.mark.parametrize("output_format,delimiter", [("tsv", "\t"), ("csv", ",")])
+def test_max_depth_delimited_bytes(depth_tree, output_format, delimiter):
+    """Machine formats give exact bytes per directory, never du -h units."""
+    output = run_archivescan(depth_tree, "-d", "1", "--format", output_format)
+    rows = list(csv.reader(io.StringIO(output), delimiter=delimiter))
+    assert rows[0] == [key.upper() for key in EXPECTED_KEYS]
+    by_path = {os.path.relpath(row[0], depth_tree): row for row in rows[1:]}
+    raw = dict(zip(EXPECTED_KEYS, by_path["raw"]))
+    assert raw["dataden_bytes"] == str(500 * 1024**2)
+    assert raw["total_bytes"] == str(500 * 1024**2)
+
+
+def test_max_depth_zero_matches_summary(depth_tree):
+    """-d 0 in tsv is the same row as the plain summary."""
+
+    def without_seconds(output):
+        return [line.rsplit("\t", 1)[0] for line in output.splitlines()]
+
+    plain = run_archivescan(depth_tree, "--format", "tsv")
+    depth_zero = run_archivescan(depth_tree, "--format", "tsv", "-d", "0")
+    assert without_seconds(plain) == without_seconds(depth_zero)
+
+
+def test_max_depth_negative(tmp_path):
+    """A negative depth is rejected."""
+    with pytest.raises(subprocess.CalledProcessError):
+        run_archivescan(tmp_path, "-d", "-1")
+
+
+@pytest.mark.parametrize(
+    "num_bytes,expected",
+    [
+        (512, "512"),
+        (1024, "1.0K"),
+        (1536, "1.5K"),
+        (10 * 1024 - 1, "10K"),
+        (234 * 1024**2, "234M"),
+        (1024**3 + 1, "1.1G"),
+    ],
+)
+def test_human_size_like_du(tmp_path, num_bytes, expected):
+    """Directory table sizes follow GNU du -h, rounded up."""
+    (tmp_path / "dir").mkdir()
+    with open(tmp_path / "dir" / "file", "wb") as handle:
+        handle.truncate(num_bytes)
+    lines = run_archivescan(tmp_path, "-d", "1", "--no-header").splitlines()
+    assert lines[0].split()[5] == expected
