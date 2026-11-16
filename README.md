@@ -55,6 +55,11 @@ Prebuilt Docker images run under Docker, Apptainer or Singularity, see [docker/R
 apptainer pull archivetar.sif docker://ghcr.io/brockpalen/archivetar:latest
 ```
 
+Globus Flow (optional)
+----------------------
+
+Sites can let users without a shell archive a folder from the Globus web app with the optional `archivetar_flow` wrapper, see [docs/globus-flow.md](docs/globus-flow.md).
+
 Building archivetar
 -------------------
 

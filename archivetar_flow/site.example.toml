@@ -1,0 +1,37 @@
+# Host-side config for the archivetar Globus Flow functions.
+#
+# Install on every Compute endpoint node as /etc/archive-flow/site.toml
+# (readable by all users, writable by root), or point
+# ARCHIVE_FLOW_SITE_CONFIG at another path, e.g. on a single-user test
+# endpoint. The functions ignore any similar values passed as flow inputs.
+
+# Filesystem path of the staging root. Must be root-owned, mode 1733
+# (users can create entries but not list or remove others').
+staging_root = "/staging"
+
+# The same directory as a path on the staging collection, e.g. "/" if the
+# collection's root is the staging root, or "/staging".
+staging_collection_base = "/"
+
+# "container" (production) runs archivetar from the image below with
+# Apptainer. "host" runs archivetar/archivepurge from PATH (testing only).
+archivetar_runtime = "container"
+archivetar_image = "/opt/archivetar/archivetar.sif"
+# Recorded in each archive's provenance manifest.
+archivetar_image_digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+apptainer_command = "apptainer"
+
+# Host runtime only.
+# archivetar_command = "archivetar"
+# archivepurge_command = "archivepurge"
+
+# Optional: a lock file on a filesystem shared by all endpoint nodes. When
+# set, only one tar runs at a time. Create it once, mode 0666.
+# tar_concurrency_lock = "/staging-locks/archivetar.lock"
+
+# Largest staged input accepted, in bytes; 0 for no limit. Staging needs
+# about twice this per run until Purge.
+max_input_bytes = 0
+
+# Deadline for each transfer in the flow, in hours.
+transfer_deadline_hours = 168

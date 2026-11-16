@@ -1,0 +1,33 @@
+# Flow-side values for rendering the archivetar flow templates.
+#
+#   archivetar-flow render --values values.toml --output-dir rendered/
+#   archivetar-flow deploy --values values.toml
+#
+# Copy this file to your site's deployment repo and fill in your IDs.
+
+title = "Archive a folder with archivetar"
+subtitle = "Tar a folder and upload it to the archive"
+
+compute_endpoint_id = "00000000-0000-0000-0000-000000000001"
+staging_collection_id = "00000000-0000-0000-0000-000000000002"
+destination_collection_id = "00000000-0000-0000-0000-000000000003"
+
+# Shown on the start form, e.g. "Destination folder on Example Archive".
+destination_collection_name = "Example Archive"
+default_destination_path = "/~/"
+
+# From `archivetar-flow register-functions`.
+[function_ids]
+setup = "00000000-0000-0000-0000-000000000011"
+tar = "00000000-0000-0000-0000-000000000012"
+purge = "00000000-0000-0000-0000-000000000013"
+
+# Longest each step may run before the flow stops waiting (ActionTimeout)
+# and rolls back. Size them for your largest archives.
+[wait_seconds]
+setup = 600
+ls = 600
+transfer = 604800   # 7 days
+tar = 259200        # 3 days
+purge = 86400       # 1 day
+delete = 86400      # 1 day

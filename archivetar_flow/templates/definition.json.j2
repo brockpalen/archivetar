@@ -1,0 +1,385 @@
+{
+  "Comment": {{ ("Archive a folder with archivetar (archivetar_flow " ~ flow_version ~ "). Stage in, tar, purge what was tarred, upload to <destination>/<run_name>/, clean up. Any failure rolls back.") | tojson }},
+  "StartAt": "LoadSiteConfig",
+  "States": {
+    "LoadSiteConfig": {
+      "Comment": "Site IDs, rendered from the values file. Every later state reads $.site.",
+      "Type": "Pass",
+      "Result": {
+        "compute_endpoint_id": {{ compute_endpoint_id | tojson }},
+        "staging_collection_id": {{ staging_collection_id | tojson }},
+        "destination_collection_id": {{ destination_collection_id | tojson }},
+        "function_ids": {
+          "setup": {{ function_ids.setup | tojson }},
+          "tar": {{ function_ids.tar | tojson }},
+          "purge": {{ function_ids.purge | tojson }}
+        }
+      },
+      "ResultPath": "$.site",
+      "Next": "Setup"
+    },
+
+    "Setup": {
+      "Comment": "Validate inputs and create the private run directory in staging. On failure the function removes anything it created.",
+      "Type": "Action",
+      "ActionUrl": "https://compute.actions.globus.org/v3",
+      "Parameters": {
+        "endpoint_id.$": "$.site.compute_endpoint_id",
+        "tasks": [
+          {
+            "function_id.$": "$.site.function_ids.setup",
+            "kwargs": {
+              "run_id.$": "$._context.run_id",
+              "run_name.$": "$.run_name",
+              "destination_path.$": "$.destination_path"
+            }
+          }
+        ]
+      },
+      "ResultPath": "$.setup_action",
+      "WaitTime": {{ wait_seconds.setup | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.error",
+          "Next": "SetupFailed"
+        }
+      ],
+      "Next": "LiftSetup"
+    },
+    "LiftSetup": {
+      "Type": "Pass",
+      "InputPath": "$.setup_action.details.results[0].output",
+      "ResultPath": "$.run",
+      "Next": "CheckDestination"
+    },
+
+    "CheckDestination": {
+      "Comment": "List the destination folder, filtered to the run name only: fails if the folder is missing, returns one entry if the archive folder already exists. No other names enter the run state.",
+      "Type": "Action",
+      "ActionUrl": "https://transfer.actions.globus.org/ls",
+      "Parameters": {
+        "endpoint_id.$": "$.site.destination_collection_id",
+        "path.$": "$.run.destination_folder",
+        "filter.$": "$.run.destination_ls_filter"
+      },
+      "ResultPath": "$.destination_ls",
+      "WaitTime": {{ wait_seconds.ls | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.error",
+          "Next": "DestinationUnavailable"
+        }
+      ],
+      "Next": "ArchiveFolderFree"
+    },
+    "ArchiveFolderFree": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.destination_ls.details.DATA[0]",
+          "IsPresent": true,
+          "Next": "ArchiveAlreadyExists"
+        }
+      ],
+      "Default": "TransferIn"
+    },
+
+    "TransferIn": {
+      "Comment": "Stage the source folder's contents into the run's work directory.",
+      "Type": "Action",
+      "ActionUrl": "https://transfer.actions.globus.org/transfer",
+      "Parameters": {
+        "source_endpoint.$": "$.source.id",
+        "destination_endpoint.$": "$.site.staging_collection_id",
+        "DATA": [
+          {
+            "source_path.$": "$.source.path",
+            "destination_path.$": "$.run.work_dir_collection",
+            "recursive": true
+          }
+        ],
+        "label.=": "'Archive ' + run_name + ': stage in'",
+        "preserve_timestamp": true,
+        "verify_checksum": true,
+        "fail_on_quota_errors": true,
+        "skip_source_errors": false,
+        "deadline.$": "$.run.transfer_deadline"
+      },
+      "ResultPath": "$.transfer_in",
+      "WaitTime": {{ wait_seconds.transfer | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.error",
+          "Next": "StageInFailed"
+        }
+      ],
+      "Next": "Tar"
+    },
+
+    "Tar": {
+      "Comment": "Run archivetar on everything staged, with allowlisted options only.",
+      "Type": "Action",
+      "ActionUrl": "https://compute.actions.globus.org/v3",
+      "Parameters": {
+        "endpoint_id.$": "$.site.compute_endpoint_id",
+        "tasks": [
+          {
+            "function_id.$": "$.site.function_ids.tar",
+            "kwargs": {
+              "run_id.$": "$._context.run_id",
+              "run_name.$": "$.run_name",
+              "compression.$": "$.compression",
+              "advanced.$": "$.advanced"
+            }
+          }
+        ]
+      },
+      "ResultPath": "$.tar_action",
+      "WaitTime": {{ wait_seconds.tar | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.error",
+          "Next": "TarFailed"
+        }
+      ],
+      "Next": "LiftTar"
+    },
+    "LiftTar": {
+      "Type": "Pass",
+      "InputPath": "$.tar_action.details.results[0].output",
+      "ResultPath": "$.tar",
+      "Next": "Purge"
+    },
+
+    "Purge": {
+      "Comment": "Delete the staged files that were tarred (archivepurge); what is left is uploaded.",
+      "Type": "Action",
+      "ActionUrl": "https://compute.actions.globus.org/v3",
+      "Parameters": {
+        "endpoint_id.$": "$.site.compute_endpoint_id",
+        "tasks": [
+          {
+            "function_id.$": "$.site.function_ids.purge",
+            "kwargs": {
+              "run_id.$": "$._context.run_id",
+              "run_name.$": "$.run_name"
+            }
+          }
+        ]
+      },
+      "ResultPath": "$.purge_action",
+      "WaitTime": {{ wait_seconds.purge | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.error",
+          "Next": "PurgeFailed"
+        }
+      ],
+      "Next": "LiftPurge"
+    },
+    "LiftPurge": {
+      "Type": "Pass",
+      "InputPath": "$.purge_action.details.results[0].output",
+      "ResultPath": "$.purge",
+      "Next": "TransferOut"
+    },
+
+    "TransferOut": {
+      "Comment": "Upload the tars, indexes and anything not tarred to the new <destination>/<run_name>/ folder.",
+      "Type": "Action",
+      "ActionUrl": "https://transfer.actions.globus.org/transfer",
+      "Parameters": {
+        "source_endpoint.$": "$.site.staging_collection_id",
+        "destination_endpoint.$": "$.site.destination_collection_id",
+        "DATA": [
+          {
+            "source_path.$": "$.run.work_dir_collection",
+            "destination_path.$": "$.run.archive_path",
+            "recursive": true
+          }
+        ],
+        "label.=": "'Archive ' + run_name + ': upload'",
+        "preserve_timestamp": true,
+        "verify_checksum": true,
+        "fail_on_quota_errors": true,
+        "skip_source_errors": false,
+        "deadline.$": "$.run.transfer_deadline"
+      },
+      "ResultPath": "$.transfer_out",
+      "WaitTime": {{ wait_seconds.transfer | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.error",
+          "Next": "UploadFailed"
+        }
+      ],
+      "Next": "Cleanup"
+    },
+
+    "Cleanup": {
+      "Comment": "Success: remove the run directory (data, log, scan lists, markers) from staging.",
+      "Type": "Action",
+      "ActionUrl": "https://transfer.actions.globus.org/delete",
+      "Parameters": {
+        "endpoint.$": "$.site.staging_collection_id",
+        "recursive": true,
+        "ignore_missing": true,
+        "DATA": [{"path.$": "$.run.run_dir_collection"}],
+        "label.=": "'Archive ' + run_name + ': clean up staging'"
+      },
+      "ResultPath": "$.cleanup",
+      "WaitTime": {{ wait_seconds.delete | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.error",
+          "Next": "StagingCleanupFailed"
+        }
+      ],
+      "End": true
+    },
+
+    "SetupFailed": {
+      "Comment": "Setup removes what it created, so there is nothing to clean up.",
+      "Type": "Fail",
+      "Error": "SetupFailed",
+      "Cause": "The archive could not start. Check the run name and destination folder; the Setup step in this run's event log has the reason."
+    },
+
+    "DestinationUnavailable": {
+      "Type": "Pass",
+      "Result": {
+        "error": "DestinationUnavailable",
+        "message": "The destination folder does not exist or you cannot access it. Nothing was archived."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupAfterFailure"
+    },
+    "ArchiveAlreadyExists": {
+      "Type": "Pass",
+      "Result": {
+        "error": "ArchiveAlreadyExists",
+        "message": "An archive with this run name already exists in the destination folder. Choose a new run name. Nothing was changed."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupAfterFailure"
+    },
+    "StageInFailed": {
+      "Type": "Pass",
+      "Result": {
+        "error": "StageInFailed",
+        "message": "Copying your data to the staging area failed. Nothing was archived, and your original data was not changed."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupAfterFailure"
+    },
+    "TarFailed": {
+      "Type": "Pass",
+      "Result": {
+        "error": "TarFailed",
+        "message": "Creating the archive failed. Nothing was archived, and your original data was not changed. The Tar step in this run's event log has the reason."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupAfterFailure"
+    },
+    "PurgeFailed": {
+      "Type": "Pass",
+      "Result": {
+        "error": "PurgeFailed",
+        "message": "Preparing the archive for upload failed. Nothing was archived, and your original data was not changed."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupAfterFailure"
+    },
+    "UploadFailed": {
+      "Type": "Pass",
+      "Result": {
+        "error": "UploadFailed",
+        "message": "Uploading the archive failed, so the partial upload was removed. Nothing was archived, and your original data was not changed."
+      },
+      "ResultPath": "$.failure",
+      "Next": "RollbackDestination"
+    },
+
+    "RollbackDestination": {
+      "Comment": "Remove the partial <destination>/<run_name>/. CheckDestination proved it did not exist before this run, so everything in it was written by this run.",
+      "Type": "Action",
+      "ActionUrl": "https://transfer.actions.globus.org/delete",
+      "Parameters": {
+        "endpoint.$": "$.site.destination_collection_id",
+        "recursive": true,
+        "ignore_missing": true,
+        "DATA": [{"path.$": "$.run.archive_path"}],
+        "label.=": "'Archive ' + run_name + ': remove partial upload'"
+      },
+      "ResultPath": "$.rollback",
+      "WaitTime": {{ wait_seconds.delete | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.rollback_error",
+          "Next": "RollbackFailed"
+        }
+      ],
+      "Next": "CleanupAfterFailure"
+    },
+    "RollbackFailed": {
+      "Type": "Pass",
+      "Result": {
+        "error": "UploadFailedPartialArchiveLeft",
+        "message": "Uploading the archive failed, and the partial upload in the destination folder could not be removed. Do not use it; contact your administrator."
+      },
+      "ResultPath": "$.failure",
+      "Next": "CleanupAfterFailure"
+    },
+
+    "CleanupAfterFailure": {
+      "Comment": "Remove the run directory from staging, then end the run as failed.",
+      "Type": "Action",
+      "ActionUrl": "https://transfer.actions.globus.org/delete",
+      "Parameters": {
+        "endpoint.$": "$.site.staging_collection_id",
+        "recursive": true,
+        "ignore_missing": true,
+        "DATA": [{"path.$": "$.run.run_dir_collection"}],
+        "label.=": "'Archive ' + run_name + ': clean up staging'"
+      },
+      "ResultPath": "$.cleanup",
+      "WaitTime": {{ wait_seconds.delete | tojson }},
+      "ExceptionOnActionFailure": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["ActionUnableToRun", "ActionFailedException", "ActionTimeout"],
+          "ResultPath": "$.cleanup_error",
+          "Next": "RunFailed"
+        }
+      ],
+      "Next": "RunFailed"
+    },
+    "RunFailed": {
+      "Type": "Fail",
+      "ErrorPath": "$.failure.error",
+      "CausePath": "$.failure.message"
+    },
+    "StagingCleanupFailed": {
+      "Comment": "The archive is complete at the destination; only staging cleanup failed.",
+      "Type": "Fail",
+      "Error": "StagingCleanupFailed",
+      "Cause": "Your archive was uploaded and verified, but cleaning up the staging area failed. Your archive is fine; please tell your administrator."
+    }
+  }
+}
