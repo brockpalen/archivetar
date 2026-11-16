@@ -16,6 +16,8 @@ pre-commit = "*"
 yamllint = "*"
 pyinstaller = "*"
 freezegun = "*"
+jinja2 = "*"
+jsonschema = "*"
 
 [packages]
 humanfriendly = "*"

@@ -1,0 +1,66 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source", "destination_path", "run_name", "compression", "advanced"],
+  "propertyOrder": ["source", "destination_path", "run_name", "compression", "advanced"],
+  "properties": {
+    "source": {
+      "type": "object",
+      "title": "Folder to archive",
+      "description": "Pick the folder whose contents you want to archive. It is copied, never changed.",
+      "format": "globus-collection",
+      "additionalProperties": false,
+      "required": ["id", "path"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "path": {"type": "string"}
+      },
+      "default": {"path": "/~/"}
+    },
+    "destination_path": {
+      "type": "string",
+      "title": {{ ("Destination folder on " ~ destination_collection_name) | tojson }},
+      "description": "An existing folder to put the archive in. A new folder named after the run name is created inside it.",
+      "default": {{ default_destination_path | tojson }}
+    },
+    "run_name": {
+      "type": "string",
+      "title": "Run name",
+      "description": "Names the new archive folder and the tar files. Letters, digits, '.', '_' and '-' only; must be new in the destination folder.",
+      "pattern": {{ run_name_pattern | tojson }},
+      "maxLength": 64
+    },
+    "compression": {
+      "type": "string",
+      "title": "Compression",
+      "description": "gzip makes smaller archives; none is faster for data that is already compressed.",
+      "enum": {{ compression_choices | tojson }},
+      "default": {{ default_compression | tojson }}
+    },
+    "advanced": {
+      "type": "object",
+      "title": "Advanced: leave as default unless you use archivetar on the command line",
+      "description": "Options passed to archivetar.",
+      "additionalProperties": false,
+      "required": ["tar_size", "size"],
+      "propertyOrder": ["tar_size", "size"],
+      "properties": {
+        "tar_size": {
+          "type": "string",
+          "title": "Tar size",
+          "description": "Target size of each tar before compression, in binary units (e.g. 100G, 1T); between 1M and 10T.",
+          "pattern": {{ size_pattern | tojson }},
+          "default": {{ default_tar_size | tojson }}
+        },
+        "size": {
+          "type": "string",
+          "title": "Leave large files untarred",
+          "description": "Files this size or larger are uploaded as they are, beside the tars, with a checksum list (e.g. 10G). Empty tars everything.",
+          "pattern": {{ ("^$|" ~ size_pattern) | tojson }},
+          "default": ""
+        }
+      },
+      "default": {"tar_size": {{ default_tar_size | tojson }}, "size": ""}
+    }
+  }
+}

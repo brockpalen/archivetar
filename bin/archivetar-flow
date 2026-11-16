@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+
+# Register, render and deploy the archivetar Globus Flow.
+# Needs the archivetar[globus-flow] extra.
+
+import sys
+
+import archivetar_flow.deploy
+
+sys.exit(archivetar_flow.deploy.main(sys.argv))

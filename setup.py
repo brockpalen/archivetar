@@ -24,5 +24,15 @@ setuptools.setup(
         "bin/unarchivetar",
         "bin/archivepurge",
         "bin/archivescan",
+        "bin/archivetar-flow",
     ],
+    # The Globus Flow wrapper (archivetar_flow) is optional. Its endpoint
+    # functions need only the standard library (Python 3.11+); this extra
+    # is for registering and deploying the flow from an admin machine.
+    extras_require={
+        "globus-flow": ["globus-sdk", "globus-compute-sdk", "jinja2"],
+    },
+    package_data={
+        "archivetar_flow": ["templates/*.j2", "*.example.toml"],
+    },
 )
