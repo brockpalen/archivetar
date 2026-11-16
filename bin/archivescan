@@ -47,7 +47,7 @@ dir_path = os.getcwd()
 
 datadenrate = float(os.getenv("DATADENRATE", 20.04))
 
-# data den Migrate size MB
+# data den Migrate size MB, default for --size
 migratesize = int(os.getenv("MIGRATESIZE", 100))
 
 # cost of Locker/TB/yr
@@ -71,6 +71,33 @@ offlineratio = int(os.getenv("OFFLINERATIO", 2.0))
 
 byteintbyte = 1024.0 * 1024 * 1024 * 1024
 
+# binary unit multipliers for --size, stdlib only so this stays a standalone script
+size_units = {"": 1, "K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4, "P": 1024**5}
+
+
+def parse_size(text):
+    """Parse a human size such as 100M, 1.5G or 2TiB into bytes.
+
+    Units are always binary (1K = 1024 bytes); a trailing "B" or "iB" is
+    optional. A bare number is taken as bytes.
+
+    Args:
+        text: Size string to parse.
+
+    Returns:
+        Size in bytes as an int.
+
+    Raises:
+        argparse.ArgumentTypeError: If the text is not a valid size.
+    """
+    match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([KMGTP]?)(?:i?B)?\s*", text, re.I)
+    if not match:
+        raise argparse.ArgumentTypeError(
+            f"invalid size '{text}', expected a number with optional unit e.g. 100M, 1G"
+        )
+    number, unit = match.groups()
+    return int(float(number) * size_units[unit.upper()])
+
 
 parser = argparse.ArgumentParser(
     description="""
@@ -88,6 +115,16 @@ parser.add_argument(
     help="Include only matching files in statistics and recalls (Python fnmatch syntax).",
     type=str,
     default="*",
+)
+parser.add_argument(
+    "-s",
+    "--size",
+    help=(
+        "Files larger than this are Data Den candidates, e.g. 100M, 1G; binary units. "
+        f"Default {migratesize}M (env MIGRATESIZE in MB)"
+    ),
+    type=parse_size,
+    default=migratesize * 1024 * 1024,
 )
 parser.add_argument(
     "-v",
@@ -154,6 +191,7 @@ else:
 
 recall_queue = Queue()
 
+
 # get size of all files in a directory path
 # filter_size : files greater than this are counted
 def get_size(start_path=".", filter_size=104857600):
@@ -170,7 +208,7 @@ def get_size(start_path=".", filter_size=104857600):
             for dirpath, dirnames, filenames in os.walk(start_path)
         ],
     )
-    for (a, b, c, d) in output:
+    for a, b, c, d in output:
         total_size += a
         total_cnt += b
         ctotal_size += c
@@ -298,7 +336,7 @@ if __name__ == "__main__":
 
     start_time = time.time()
 
-    size, count, csize, ccnt = get_size(filter_size=migratesize * 1024 * 1024)
+    size, count, csize, ccnt = get_size(filter_size=ops.size)
     tbyte = math.ceil(size / byteintbyte)
     extra_cache = calc_cache(tbyte)  # calculate extra cache for tape data in flight
 
@@ -321,7 +359,15 @@ if __name__ == "__main__":
         print("")
         print("Total Time %.2f Seconds" % (time.time() - start_time))
 
-        print("Fraction Offline: %.5f %%" % (size / (size + csize) * 100))
+        total_size = size + csize
+        # guard against an empty or fully filtered tree
+        fraction = size / total_size * 100 if total_size else 0.0
+        print("Fraction Offline: %.5f %%" % fraction)
+
+        print("")
+        print("Total:")
+        print("Files: %s" % (count + ccnt))
+        print("Size: %s" % (sizeof_fmt(total_size)))
 
     if ops.recall:
         recall()
