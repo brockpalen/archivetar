@@ -4,6 +4,8 @@ archivescan parses its arguments at import time, so it is exercised as a
 subprocess run inside a temporary directory tree.
 """
 
+import csv
+import io
 import json
 import re
 import subprocess  # nosec B404 - runs our own script with fixed arguments
@@ -45,7 +47,7 @@ def parse_sections(output):
         Dict keyed by section heading with (file count, size string) values.
     """
     sections = {}
-    pattern = re.compile(r"^(.+):\nFiles: (\d+)\nSize: (\S+)$", re.M)
+    pattern = re.compile(r"^(.+):\nFiles: (\d+)\nSize: (.+)$", re.M)
     for heading, files, size in pattern.findall(output):
         sections[heading] = (int(files), size)
     return sections
@@ -101,13 +103,14 @@ def test_size_overrides_env(scan_tree, monkeypatch):
 def test_totals(scan_tree):
     """Total section sums both candidate groups."""
     sections = parse_sections(run_archivescan(scan_tree, "-s", "1M"))
-    assert sections["Total"] == (3, "22.0MiB")
+    assert sections["Total"] == (3, "22 MiB")
 
 
 def test_totals_empty_tree(tmp_path):
     """An empty tree reports zero totals instead of dividing by zero."""
-    sections = parse_sections(run_archivescan(tmp_path))
-    assert sections["Total"] == (0, "0.0B")
+    output = run_archivescan(tmp_path)
+    assert parse_sections(output)["Total"] == (0, "0 bytes")
+    assert "Fraction Offline: n/a (no files)" in output
 
 
 def test_invalid_size(tmp_path):
@@ -116,27 +119,91 @@ def test_invalid_size(tmp_path):
         run_archivescan(tmp_path, "-s", "lots")
 
 
+def test_table_threshold_line(scan_tree):
+    """The table names the threshold as globus-fs archivescan does."""
+    output = run_archivescan(scan_tree, "-s", "1.5G")
+    assert "Threshold: files larger than 1.5 GiB" in output
+
+
+@pytest.mark.parametrize("num_bytes", [0, 1, 1023, 1024, 1536, 22 * 1024**2 + 1024])
+def test_sizes_match_humanfriendly(tmp_path, num_bytes):
+    """Sizes are formatted exactly like humanfriendly, as globus-fs prints them."""
+    humanfriendly = pytest.importorskip("humanfriendly")
+    with open(tmp_path / "file", "wb") as handle:
+        handle.truncate(num_bytes)
+    sections = parse_sections(run_archivescan(tmp_path))
+    assert sections["Total"][1] == humanfriendly.format_size(num_bytes, binary=True)
+
+
+EXPECTED_KEYS = [
+    "path",
+    "threshold_bytes",
+    "dataden_files",
+    "dataden_bytes",
+    "cache_files",
+    "cache_bytes",
+    "total_files",
+    "total_bytes",
+    "fraction_offline",
+    "seconds",
+]
+
+
 def test_json_output(scan_tree):
-    """--json prints a machine-readable summary with raw byte counts."""
-    results = json.loads(run_archivescan(scan_tree, "--json", "-s", "1M"))
+    """--format json prints one flat object with the globus-fs keys."""
+    results = json.loads(run_archivescan(scan_tree, "--format", "json", "-s", "1M"))
+    assert list(results) == EXPECTED_KEYS
+    assert results["path"] == str(scan_tree)
     assert results["threshold_bytes"] == 1024**2
-    assert results["dataden"]["files"] == 2
-    assert results["dataden"]["bytes"] == 22 * 1024**2
-    assert results["cache"] == {"files": 1, "bytes": 1024, "size": "1.0KiB"}
-    assert results["total"]["files"] == 3
-    assert results["total"]["bytes"] == 22 * 1024**2 + 1024
-    assert results["current_state"] is False
+    assert (results["dataden_files"], results["dataden_bytes"]) == (2, 22 * 1024**2)
+    assert (results["cache_files"], results["cache_bytes"]) == (1, 1024)
+    assert (results["total_files"], results["total_bytes"]) == (3, 22 * 1024**2 + 1024)
+    assert results["fraction_offline"] == round(100.0 * 22 * 1024 / (22 * 1024 + 1), 5)
 
 
 def test_json_empty_tree(tmp_path):
-    """--json on an empty tree reports zeros."""
-    results = json.loads(run_archivescan(tmp_path, "--json"))
-    assert results["total"]["files"] == 0
-    assert results["fraction_offline_percent"] == 0.0
+    """An empty tree has no fraction offline."""
+    results = json.loads(run_archivescan(tmp_path, "--format", "json"))
+    assert results["total_files"] == 0
+    assert results["fraction_offline"] is None
 
 
+@pytest.mark.parametrize("output_format,delimiter", [("tsv", "\t"), ("csv", ",")])
+def test_delimited_output(scan_tree, output_format, delimiter):
+    """tsv and csv print an upper-case header and one row."""
+    output = run_archivescan(scan_tree, "--format", output_format, "-s", "1M")
+    rows = list(csv.reader(io.StringIO(output), delimiter=delimiter))
+    assert rows[0] == [key.upper() for key in EXPECTED_KEYS]
+    assert len(rows) == 2
+    row = dict(zip(EXPECTED_KEYS, rows[1]))
+    assert row["dataden_files"] == "2"
+    assert row["total_bytes"] == str(22 * 1024**2 + 1024)
+
+
+def test_delimited_no_header(scan_tree):
+    """--no-header leaves only the data row, for loops over many directories."""
+    output = run_archivescan(scan_tree, "--format", "tsv", "--no-header")
+    assert len(output.splitlines()) == 1
+    assert output.split("\t")[0] == str(scan_tree)
+
+
+def test_delimited_empty_fraction(tmp_path):
+    """No fraction offline is an empty field, not "None"."""
+    output = run_archivescan(tmp_path, "--format", "csv", "--no-header")
+    assert (
+        next(csv.reader(io.StringIO(output)))[EXPECTED_KEYS.index("fraction_offline")]
+        == ""
+    )
+
+
+@pytest.mark.parametrize("output_format", ["tsv", "csv", "json"])
 @pytest.mark.parametrize("other_flag", ["--quiet", "--print", "--print-offline"])
-def test_json_rejects_stdout_flags(tmp_path, other_flag):
-    """--json refuses flags that would mix other text into stdout."""
+def test_machine_formats_reject_stdout_flags(tmp_path, output_format, other_flag):
+    """Machine formats refuse flags that would mix other text into stdout."""
     with pytest.raises(subprocess.CalledProcessError):
-        run_archivescan(tmp_path, "--json", other_flag)
+        run_archivescan(tmp_path, "--format", output_format, other_flag)
+
+
+def test_quiet_table(scan_tree):
+    """--quiet still silences the default table."""
+    assert run_archivescan(scan_tree, "--quiet") == ""
