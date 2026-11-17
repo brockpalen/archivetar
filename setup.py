@@ -24,5 +24,7 @@ setuptools.setup(
         "bin/unarchivetar",
         "bin/archivepurge",
         "bin/archivescan",
+        "bin/archivebackup",
+        "bin/archiverestore",
     ],
 )

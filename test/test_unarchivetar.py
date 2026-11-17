@@ -1,4 +1,5 @@
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -47,3 +48,26 @@ def test_find_prefix_files(tmp_path, prefix, suffix, args):
     tars = find_prefix_files(prefix, **args)
 
     assert len(tars) == 4
+
+
+def test_archive_dir_extracts_into_cwd(tmp_path, monkeypatch):
+    """--archive-dir finds tars elsewhere but extracts into the cwd."""
+    src, tars, out = tmp_path / "src", tmp_path / "tars", tmp_path / "out"
+    for d in (src, tars, out):
+        d.mkdir()
+    (src / "f.txt").write_text("hello")
+    subprocess.run(["tar", "-cf", str(tars / "p-1.tar"), "f.txt"], cwd=src, check=True)
+
+    monkeypatch.chdir(out)
+    archivetar.unarchivetar.main(
+        [
+            "unarchivetar",
+            "--prefix",
+            "p",
+            "--archive-dir",
+            str(tars),
+            "--tar-processes",
+            "1",
+        ]
+    )
+    assert (out / "f.txt").read_text() == "hello"
